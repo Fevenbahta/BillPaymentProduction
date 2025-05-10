@@ -1,0 +1,347 @@
+<sequence xmlns="http://ws.apache.org/ns/synapse" name="getbilllistsequence">
+
+    <!-- Logging initial info -->
+    <log level="custom">
+        <property name="Info" value="Inside getbilllistsequence"/>
+    </log>
+
+    <log level="full">
+        <property name="Starting SOAP Request" value="Sending request to get EC Invoice List."/>
+    </log>
+<script language="js">
+    var currentDate = new Date();
+    var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0]; // Formats as yyyy-MM-dd HH:mm:ss
+    mc.setProperty('currentDate', formattedDate);
+</script>
+
+    <!-- Extract phone number from incoming payload (assuming it's JSON) -->
+    <property name="phoneNumber" expression="json-eval($.phoneNumber)" scope="default"/>
+ <property name="billerType" expression="json-eval($.billerType)" scope="default"/>
+   <property name="referenceNo" expression="json-eval($.referenceNo)" scope="default"/>
+ <property name="accountNo" expression="json-eval($.accountNo)" scope="default"/>
+
+    <!-- Log the extracted phone number -->
+    <log level="custom">
+        <property name="Extracted Phone Number" expression="$ctx:phoneNumber"/>
+    </log>
+
+    <!-- Load endpoint URL from properties file -->
+    <property name="getECInvoiceListEndpointURL"
+              expression="get-property('file', 'getECInvoiceListep.properties/getECInvoiceListEndpoint')"
+              scope="default"/>
+              
+    <log level="custom">
+        <property name="Resolved URL" expression="$ctx:getECInvoiceListEndpointURL"/>
+    </log>
+
+    <!-- Construct the SOAP payload using payloadFactory -->
+    <payloadFactory media-type="xml">
+        <format>
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                              xmlns:amp="http://soprabanking.com/amplitude">
+                <soapenv:Header/>
+                <soapenv:Body>
+                    <amp:getECInvoiceListRequestFlow>
+                        <amp:requestHeader>
+                            <amp:requestId>req1</amp:requestId>
+                             <amp:serviceName>getECInvoiceList</amp:serviceName>
+                            <amp:timestamp>2024-07-30T13:52:01</amp:timestamp>
+                             <amp:originalName>TELEBIRR</amp:originalName>
+                            <amp:languageCode>002</amp:languageCode>
+                            <amp:userCode>TELEBIRR</amp:userCode>
+                        </amp:requestHeader>
+                        <amp:getECInvoiceListRequest>
+                            <amp:customerIdentification>
+                                <amp:providerComponentIdentification>
+                                    <amp:identifierNumber>3</amp:identifierNumber>
+                                    <amp:identifierValue>$3</amp:identifierValue>
+                                </amp:providerComponentIdentification>
+                            </amp:customerIdentification>
+                        </amp:getECInvoiceListRequest>
+                    </amp:getECInvoiceListRequestFlow>
+                </soapenv:Body>
+            </soapenv:Envelope>
+        </format>
+        <args>
+            <arg value="{uuid()}"/>
+            <arg value="{format-date(current-dateTime(), 'yyyy-MM-dd''T''HH:mm:ss')}"/>
+            <arg expression="$ctx:phoneNumber"/>
+        </args>
+    </payloadFactory>
+ <property name="SOAPAction" value="getECInvoiceList" scope="transport" />
+
+    <log level="full">
+        <property name="Generated SOAP Payload" expression="get-property('Payload')" />
+    </log>
+    <property name="Content-Type" value="text/xml" scope="transport"/>
+
+            <call>
+                <endpoint>
+                    <address format="soap11" uri="https://10.1.7.85:8095/getECInvoiceList"/>
+                </endpoint>
+            </call>
+
+    <log description="Log SOAP Payload" level="custom">
+        <property name="SOAP Payload" expression="$body"/>
+    </log>
+
+    <log description="full log" level="full"/>
+    <!-- Log the response received from external service -->
+    <log level="full">
+        <property name="SOAP Response" expression="$body"/>
+    </log>
+
+<!-- Extract response value (update this XPath based on your SOAP response structure) -->
+  <property name="responseCode" expression="//amp:responseStatus/amp:statusCode/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+
+    <!-- Filter success or failure -->
+   <filter xpath="//amp:responseStatus/amp:statusCode/text() = '0' and boolean(//amp:getECInvoiceListResponse) " xmlns:amp="http://soprabanking.com/amplitude">
+   <then>
+    <!-- Initialize an empty JSON array -->
+    <property name="invoiceItems" value="" scope="default" type="STRING" />
+
+    <!-- Loop through each invoice detail -->
+    <foreach expression="//fjs1:getECInvoiceListResponse/fjs1:invoice" xmlns:fjs1="http://soprabanking.com/amplitude">
+        <sequence>
+            <!-- Extract data per invoice -->
+            <property name="status" value="0"/>
+            <property name="providerId" expression="//fjs1:providerId/text()" xmlns:fjs1="http://soprabanking.com/amplitude"/>
+            <property name="invoiceId" expression="//fjs1:invoiceId/text()" xmlns:fjs1="http://soprabanking.com/amplitude"/>
+            <property name="invoiceIdentificationValue" expression="//fjs1:invoiceIdentification/fjs1:providerComponentIdentification[1]/fjs1:identifierValue/text()" xmlns:fjs1="http://soprabanking.com/amplitude"/>
+            <property name="invoiceAmount" expression="//fjs1:invoiceAmount/fjs1:amount1/text()" xmlns:fjs1="http://soprabanking.com/amplitude"/>
+            <property name="currencyAlphaCode" value="ETB"/>
+            <property name="currencyDesignation" value="ETHIOPIAN BIRR"/>
+            <property name="customerName" expression="//fjs1:customerIdentification/fjs1:providerComponentIdentification[2]/fjs1:identifierValue/text()" xmlns:fjs1="http://soprabanking.com/amplitude"/>
+            <property name="providerName" expression="//fjs1:customerIdentification/fjs1:providerComponentIdentification[1]/fjs1:identifierValue/text()" xmlns:fjs1="http://soprabanking.com/amplitude"/>
+
+            <!-- Log the extracted data -->
+            <log level="custom">
+                <property name="logMessage" expression="concat('Extracted In Invoice: Status: ', get-property('status'), ', ProviderId: ', get-property('providerId'), ', InvoiceId: ', get-property('invoiceId'), ', Amount: ', get-property('invoiceAmount'), ', Currency: ', get-property('currencyAlphaCode'))" />
+            </log>
+
+            <!-- Format this invoice as JSON -->
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "status": "$1",
+                        "providerId": "$2",
+                        "invoiceId": "$3",
+                        "invoiceIdentificationValue": "$4",
+                        "invoiceAmount": "$5",
+                        "currencyAlphaCode": "$6",
+                        "currencyDesignation": "$7",
+                        "customerName": "$8",
+                        "providerName": "$9"
+                    }
+                </format>
+                <args>
+                    <arg expression="get-property('status')"/>
+                    <arg expression="get-property('providerId')"/>
+                    <arg expression="get-property('invoiceId')"/>
+                    <arg expression="get-property('invoiceIdentificationValue')"/>
+                    <arg expression="get-property('invoiceAmount')"/>
+                    <arg expression="get-property('currencyAlphaCode')"/>
+                    <arg expression="get-property('currencyDesignation')"/>
+                    <arg expression="get-property('customerName')"/>
+                    <arg expression="get-property('providerName')"/>
+                </args>
+            </payloadFactory>
+
+            <!-- Append the invoice JSON to the invoiceItems array -->
+            <script language="js">
+                <![CDATA[
+                    var currentPayload = mc.getPayloadJSON(); // Get the current invoice payload as JSON
+                    var existing = mc.getProperty('invoiceItems'); // Get existing invoiceItems property
+                    if (!existing || existing.trim() === '') {
+                        existing = ''; // Start with an empty string if no previous items
+                    } else {
+                        existing += ','; // Add a comma if there are previous items
+                    }
+                    var updated = existing + JSON.stringify(currentPayload); // Append the new invoice item
+                    mc.setProperty('invoiceItems', updated); // Save back to invoiceItems
+                ]]>
+            </script>
+<property name="status" value="success" scope="default"/>
+       <property name="responseError" value="false" scope="default"/>
+            <!-- Insert the invoice data into the database -->
+            <dbreport>
+                <connection>
+                    <pool>
+                        <dsName>jdbc/PostgresDB</dsName>
+                    </pool>
+                </connection>
+                <statement>
+                    
+                    <sql>
+                        INSERT INTO public."BillGetRequests" (
+                            "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
+                            "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError",
+                            "ResProviderId", "InvoiceId", "InvoiceIdentificationValue", "InvoiceAmount",
+                            "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName"
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','),
+                             string_to_array(CAST(? AS TEXT), ',')::numeric[]
+, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','))
+                    </sql>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                    <parameter expression="get-property('ReqProviderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('UniqueCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('status')" type="VARCHAR"/>
+                    <parameter expression="get-property('ResponseError')" type="VARCHAR"/>
+                    <parameter expression="get-property('ResProviderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('InvoiceId')" type="VARCHAR"/>
+                    <parameter expression="get-property('InvoiceIdentificationValue')" type="VARCHAR"/>
+                  <parameter expression="get-property('InvoiceAmount')" type="DECIMAL"/>
+
+                    <parameter expression="get-property('CurrencyAlphaCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('CurrencyDesignation')" type="VARCHAR"/>
+                    <parameter expression="get-property('CustomerName')" type="VARCHAR"/>
+                    <parameter expression="get-property('ProviderName')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+
+        </sequence>
+    </foreach>
+
+    <!-- Log the full array of invoice items -->
+    <log level="custom">
+        <property name="invoiceItems" expression="get-property('invoiceItems')" />
+    </log>
+
+    <!-- Return the full array as the response -->
+    <payloadFactory media-type="json">
+        <format>
+            [{ "invoices": $1 }]
+        </format>
+        <args>
+            <arg expression="get-property('invoiceItems')"/>
+        </args>
+    </payloadFactory>
+    
+    <!-- Respond back with the invoice list -->
+    <respond/>
+</then>
+
+    <else>
+        <property name="status" value="success" scope="default"/>
+           <property name="responseError" value="true" scope="default"/>
+          <property name="HTTP_SC" value="500" scope="axis2" type="INTEGER"/>
+   
+                <script language="js">
+        <![CDATA[
+            var uuid = (function() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0,
+                        v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            })();
+            mc.setProperty("ticketId", uuid);  // Save generated UUID to the property
+        ]]>
+    </script>
+        <payloadFactory media-type="json">
+            <format>
+                {
+                  "returnCode": "ERROR",
+                  "ticketId": "$1",
+                  "traceId": "Lib023456",
+                  "feedbacks": [
+                    {
+                      "code": "SB_DS_001",
+                      "label": "Invalid response",
+                      "severity": "ERROR",
+                      "type": "BUS",
+                      "source": "getbilllistsequence.responseStatus",
+                      "origin": "LIBAPP",
+                      "spanId": "$3",
+                      "parameters": [
+                        {
+                          "code": "0",
+                          "value": "No valid bill found with this phone number"
+                        }
+                      ]
+                    }
+                  ]
+                }
+            </format>
+            <args>
+                 <arg expression="$ctx:ticketId"/> 
+                <arg expression="fn:substring-before(get-property('MESSAGE_ID'), '@')"/>
+                <arg value="{substring(uuid(), 1, 8)}"/>
+            </args>
+        </payloadFactory>
+           <dbreport>
+            <connection>
+                <pool>
+                    <dsName>jdbc/PostgresDB</dsName>
+                </pool>
+            </connection>
+            <statement>
+                <sql>
+                    INSERT INTO public."BillGetRequests" (
+                        "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
+                        "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError"
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                </sql>
+                           <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                   <parameter expression="get-property('providerId')" type="VARCHAR"/>
+                <parameter expression="get-property('uniqueCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('status')" type="VARCHAR"/>
+                    <parameter expression="get-property('responseError')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+
+          <property name="returnCode" value="ERROR"/>
+          
+          <property name="feedback" value="No valid bill found"/>
+         
+<script language="js">
+    var currentDate = new Date();
+    var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0]; // Formats as yyyy-MM-dd HH:mm:ss
+    mc.setProperty('currentDate', formattedDate);
+</script>
+
+
+<dbreport>
+            <connection>
+                <pool>
+                    <dsName>jdbc/PostgresDB</dsName>
+                </pool>
+            </connection>
+            <statement>
+                <sql>
+                    INSERT INTO public.BillError (
+                      "Id","ReturnCode", "TicketId", "TraceId", "Feedbacks", "RequestDate", "ErrorType"
+                    )
+                    VALUES (?,?, ?, ?, ?, ?, ?)
+                </sql>
+                 <parameter expression="get-property('ticketId')" type="VARCHAR"/>  <!-- TicketId -->
+                <parameter expression="get-property('returnCode')" type="VARCHAR"/>  <!-- ReturnCode -->
+                <parameter expression="get-property('ticketId')" type="VARCHAR"/>  <!-- TicketId -->
+                <parameter expression="get-property('traceId')" type="VARCHAR"/>  <!-- TraceId -->
+                <parameter expression="get-property('feedback')" type="VARCHAR"/>  <!-- Feedbacks -->
+                <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>  <!-- RequestDate -->
+                <parameter expression="'API Error'" type="VARCHAR"/>  <!-- ErrorType -->
+            </statement>
+        </dbreport>
+        <respond/>
+
+
+ 
+    </else>
+</filter>
+
+    <respond/>
+
+</sequence>

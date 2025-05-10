@@ -1,0 +1,33 @@
+<sequence xmlns="http://ws.apache.org/ns/synapse" name="errorSequence">
+    <log level="full">
+        <property name="Error Message" value="Phone number is missing or invalid. Flow Terminated."/>
+    </log>
+
+    <!-- Use the script mediator to generate the error response -->
+    <script language="js">
+        var response = {
+            "returnCode": "ERROR",
+            "ticketId": mc.getProperty("ticketId"),  // Context variable for ticketId
+            "traceId": mc.getProperty("traceId"),  // Context variable for traceId
+            "feedbacks": [{
+                "code": mc.getProperty("errorCode"),  // Context variable for errorCode
+                "label": mc.getProperty("errorMessage"),  // Context variable for errorMessage
+                "severity": "ERROR",
+                "type": "BUS",
+                "source": mc.getProperty("source"),  // Context variable for source
+                "origin": mc.getProperty("applicationCode"),  // Context variable for applicationCode
+                "spanId": mc.getProperty("spanId"),  // Context variable for spanId
+                "parameters": [{
+                    "code": "0",
+                    "value": mc.getProperty("parameterValue")  // Context variable for parameterValue
+                }]
+            }]
+        };
+
+        // Set the response as the payload
+        mc.setPayloadJSON(response);
+    </script>
+
+    <!-- Optionally, respond with the error payload -->
+    <respond/>
+</sequence>

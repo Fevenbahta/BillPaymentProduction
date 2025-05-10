@@ -1,0 +1,318 @@
+<sequence name="getbilldetailsequence" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+    <log level="custom">
+        <property name="INFO" value="Starting getbilldetailsequence" />
+    </log>
+<script language="js">
+    var currentDate = new Date();
+    var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0]; // Formats as yyyy-MM-dd HH:mm:ss
+    mc.setProperty('currentDate', formattedDate);
+</script>
+
+    <!-- Extract phone number from incoming payload (assuming it's JSON) -->
+    <property name="phoneNumber" expression="json-eval($.phoneNumber)" scope="default"/>
+ <property name="billerType" expression="json-eval($.billerType)" scope="default"/>
+   <property name="referenceNo" expression="json-eval($.referenceNo)" scope="default"/>
+ <property name="accountNo" expression="json-eval($.accountNo)" scope="default"/>
+   <property name="providerId" expression="json-eval($.providerId)" scope="default"/>
+ <property name="uniqueCode" expression="json-eval($.uniqueCode)" scope="default"/>
+
+    <property name="SOAPAction" value="getECInvoiceDetail" scope="transport" />
+    
+    <!-- Make the SOAP Request -->
+    <payloadFactory media-type="xml">
+        <format>
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:amp="http://soprabanking.com/amplitude">
+                <soapenv:Header/>
+                <soapenv:Body>
+                    <amp:getECInvoiceDetailRequestFlow>
+                        <amp:requestHeader>
+                            <amp:requestId>req1</amp:requestId>
+                            <amp:serviceName>getECInvoiceDetail</amp:serviceName>
+                            <amp:timestamp>2024-07-30T13:52:01</amp:timestamp>
+                            <amp:originalName>TELEBIRR</amp:originalName>
+                            <amp:languageCode>002</amp:languageCode>
+                            <amp:userCode>TELEBIRR</amp:userCode>
+                        </amp:requestHeader>
+                        <amp:getECInvoiceDetailRequest>
+                            <amp:providerInvoiceIdentification>
+                                <amp:providerId>$3</amp:providerId>
+                                <amp:invoiceIdentification>
+                                    <amp:providerComponentIdentification>
+                                        <amp:identifierNumber>2</amp:identifierNumber>
+                                        <amp:identifierValue>$4</amp:identifierValue>
+                                    </amp:providerComponentIdentification>
+                                </amp:invoiceIdentification>
+                            </amp:providerInvoiceIdentification>
+                        </amp:getECInvoiceDetailRequest>
+                    </amp:getECInvoiceDetailRequestFlow>
+                </soapenv:Body>
+            </soapenv:Envelope>
+        </format>
+        <args>
+            <arg expression="get-property('currentDate')" />
+            <arg expression="get-property('currentTime')" />
+            <arg expression="get-property('providerId')" />
+            <arg expression="get-property('identifierValue')" />
+        </args>
+    </payloadFactory>
+
+    <!-- Log SOAP request payload -->
+    <log level="full">
+        <property name="Generated SOAP Payload" expression="get-property('Payload')" />
+    </log>
+
+    <!-- Send the SOAP request -->
+    <call>
+        <endpoint>
+            <address format="soap11" uri="https://10.1.7.85:8095/getECInvoiceDetail"/>
+        </endpoint>
+    </call>
+
+    <!-- Log full SOAP response -->
+    <log level="full">
+        <property name="ResponsePayload" expression="get-property('axis2', 'RESPONSE')"/>
+    </log>
+
+    <!-- Extract response code -->
+    <log level="custom">
+    <property name="responseCode" expression="//amp:responseStatus/amp:statusCode/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+<property name="getECInvoiceDetailResponse" expression="//amp:getECInvoiceDetailResponse/amp:providerId/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+    </log>
+    <!-- Filter success or failure -->
+   <filter xpath="//amp:responseStatus/amp:statusCode/text() = '0' and string-length(get-property('getECInvoiceDetailResponse')) > 0 " xmlns:amp="http://soprabanking.com/amplitude">
+       <then>
+            <!-- Success: Transform SOAP response to JSON -->
+<payloadFactory media-type="json">
+    <format>
+        [
+            {
+                "status": "$1",  <!-- Response Status Code -->
+                "providerId": "$2",  <!-- providerId -->
+                "invoiceId": "$3",  <!-- invoiceId -->
+                "invoiceIdentificationValue": "$4",  <!-- Invoice identification -->
+                "invoiceAmount": "$5",  <!-- Amount -->
+                "currencyAlphaCode": "ETB",  <!-- Currency Alpha Code -->
+                "currencyDesignation": "ETHIOPIAN BIRR",  <!-- Currency Designation -->
+                "customerName": "$8",  <!-- Customer Name -->
+                "providerName": "$9"  <!-- Provider Name -->
+            }
+        ]
+    </format>
+    <args>
+        <!-- Extract status code from response (with namespace) -->
+        <arg expression="//amp:responseStatus/amp:statusCode/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+
+        <!-- Extract providerId (with namespace) -->
+        <arg expression="//amp:getECInvoiceDetailResponse/amp:providerId/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+
+        <!-- Extract invoiceId (with namespace) -->
+        <arg expression="//amp:getECInvoiceDetailResponse/amp:invoiceId/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+
+        <!-- Extract invoice identification value (with namespace) -->
+        <arg expression="//amp:getECInvoiceDetailResponse/amp:invoiceIdentification/amp:providerComponentIdentification[1]/amp:identifierValue/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+
+        <!-- Extract invoice amount (with namespace) -->
+        <arg expression="//amp:getECInvoiceDetailResponse/amp:invoiceAmount/amp:amount/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+
+        <!-- Extract currency alpha code (with namespace) -->
+        <arg expression="//amp:getECInvoiceDetailResponse/amp:invoiceAmount/amp:currency/amp:alphaCode/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+
+        <!-- Extract currency designation (with namespace) -->
+        <arg expression="//amp:getECInvoiceDetailResponse/amp:invoiceAmount/amp:currency/amp:designation/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+
+        <!-- Extract customer name (with namespace) -->
+        <arg expression="//amp:getECInvoiceDetailResponse/amp:customerIdentification/amp:providerComponentIdentification[2]/amp:identifierValue/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+
+        <!-- Extract provider name (with namespace) -->
+        <arg expression="//amp:getECInvoiceDetailResponse/amp:customerIdentification/amp:providerComponentIdentification[1]/amp:identifierValue/text()" xmlns:amp="http://soprabanking.com/amplitude" />
+    </args>
+</payloadFactory>
+
+    <property name="ResTransactionDate" expression="//amp:transactionStatus/amp:transactionDate/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="Status" expression="//amp:responseStatus/amp:statusCode/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="ResponseError" expression="//amp:responseStatus/amp:statusMessage/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="ResProviderId" expression="//amp:responseData/amp:providerId/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="InvoiceId" expression="//amp:responseData/amp:invoiceId/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="InvoiceIdentificationValue" expression="//amp:responseData/amp:invoiceIdentificationValue/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="InvoiceAmount" expression="//amp:responseData/amp:invoiceAmount/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="CurrencyAlphaCode" expression="//amp:responseData/amp:currencyAlphaCode/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="CurrencyDesignation" expression="//amp:responseData/amp:currencyDesignation/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="CustomerName" expression="//amp:responseData/amp:customerName/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+        <property name="ProviderName" expression="//amp:responseData/amp:providerName/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+
+        <!-- Save success response in DB -->
+     <property name="status" value="success" scope="default"/>
+     <property name="responseError" value="false" scope="default"/>
+
+            <!-- Insert the invoice data into the database -->
+            <dbreport>
+                <connection>
+                    <pool>
+                        <dsName>jdbc/PostgresDB</dsName>
+                    </pool>
+                </connection>
+                <statement>
+                    
+                    <sql>
+                        INSERT INTO public."BillGetRequests" (
+                            "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
+                            "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError",
+                            "ResProviderId", "InvoiceId", "InvoiceIdentificationValue", "InvoiceAmount",
+                            "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName"
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','),
+                             string_to_array(CAST(? AS TEXT), ',')::numeric[]
+, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','))
+                    </sql>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                   <parameter expression="get-property('providerId')" type="VARCHAR"/>
+                <parameter expression="get-property('uniqueCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('status')" type="VARCHAR"/>
+                    <parameter expression="get-property('responseError')" type="VARCHAR"/>
+                    <parameter expression="get-property('ResProviderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('InvoiceId')" type="VARCHAR"/>
+                    <parameter expression="get-property('InvoiceIdentificationValue')" type="VARCHAR"/>
+                  <parameter expression="get-property('InvoiceAmount')" type="DECIMAL"/>
+
+                    <parameter expression="get-property('CurrencyAlphaCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('CurrencyDesignation')" type="VARCHAR"/>
+                    <parameter expression="get-property('CustomerName')" type="VARCHAR"/>
+                    <parameter expression="get-property('ProviderName')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+
+
+            <respond/>
+
+
+
+
+         
+
+        </then>
+
+        <else>
+              <property name="status" value="failure" scope="default"/>
+                <property name="HTTP_SC" value="500" scope="axis2" type="INTEGER"/>
+   
+     <property name="responseError" value="true" scope="default"/>
+                         <script language="js">
+        <![CDATA[
+            var uuid = (function() {
+                return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                    var r = Math.random() * 16 | 0,
+                        v = c === 'x' ? r : (r & 0x3 | 0x8);
+                    return v.toString(16);
+                });
+            })();
+            mc.setProperty("ticketId", uuid);  // Save generated UUID to the property
+        ]]>
+    </script>
+            <!-- Failure: Return error details in JSON format -->
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "returnCode": "NOT_FOUND",
+                        "ticketId": "$1",
+                        "traceId": "LIB023456",
+                        "feedbacks": [
+                            {
+                                "code": "SB_DS_001",
+                                "label": "Invoice or provider details not found.",
+                                "severity": "ERROR",
+                                "type": "BUS",
+                                "source": "GetBillSequence",
+                                "origin": "GetBillApiResponse",
+                                "spanId": "Lb034189",
+                                "parameters": [
+                                    {
+                                        "code": "0",
+                                        "value": ""
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                </format>
+                <args>
+                     <arg expression="$ctx:ticketId"/> 
+                    </args>
+            </payloadFactory>
+          
+               <dbreport>
+            <connection>
+                <pool>
+                    <dsName>jdbc/PostgresDB</dsName>
+                </pool>
+            </connection>
+            <statement>
+                <sql>
+                    INSERT INTO public."BillGetRequests" (
+                        "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
+                        "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError"
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                </sql>
+                <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                   <parameter expression="get-property('providerId')" type="VARCHAR"/>
+                <parameter expression="get-property('uniqueCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('status')" type="VARCHAR"/>
+                    <parameter expression="get-property('responseError')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+    
+          <property name="returnCode" value="ERROR"/>
+          
+          <property name="feedback" value="No valid bill found"/>
+         
+<script language="js">
+    var currentDate = new Date();
+    var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0]; // Formats as yyyy-MM-dd HH:mm:ss
+    mc.setProperty('currentDate', formattedDate);
+</script>
+
+
+
+
+
+<dbreport>
+            <connection>
+                <pool>
+                    <dsName>jdbc/PostgresDB</dsName>
+                </pool>
+            </connection>
+            <statement>
+                <sql>
+                    INSERT INTO public.BillError (
+                      "Id","ReturnCode", "TicketId", "TraceId", "Feedbacks", "RequestDate", "ErrorType"
+                    )
+                    VALUES (?,?, ?, ?, ?, ?, ?)
+                </sql>
+                 <parameter expression="get-property('ticketId')" type="VARCHAR"/>  <!-- TicketId -->
+                <parameter expression="get-property('returnCode')" type="VARCHAR"/>  <!-- ReturnCode -->
+                <parameter expression="get-property('ticketId')" type="VARCHAR"/>  <!-- TicketId -->
+                <parameter expression="get-property('traceId')" type="VARCHAR"/>  <!-- TraceId -->
+                <parameter expression="get-property('feedback')" type="VARCHAR"/>  <!-- Feedbacks -->
+                <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>  <!-- RequestDate -->
+                <parameter expression="'API Error'" type="VARCHAR"/>  <!-- ErrorType -->
+            </statement>
+        </dbreport>
+        
+        
+        <respond/>
+
+
+        </else>
+    </filter>
+</sequence>

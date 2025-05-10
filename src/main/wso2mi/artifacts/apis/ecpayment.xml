@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/ecpayment" name="ecpayment" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="POST" uri-template="/">
+        <inSequence>
+            <sequence key="validateecpayment"/>
+            <!-- You can add other processing steps if needed -->
+        </inSequence>
+        <faultSequence>
+            <!-- Handle faults if any -->
+        </faultSequence>
+    </resource>
+</api>

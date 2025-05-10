@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/getbill" name="getbill" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="POST" uri-template="/">
+        <inSequence>
+            <log level="custom">
+                <property name="Info" value="Calling validateBillGetPayload sequence"/>
+            </log>
+            <!-- Call your custom validation sequence -->
+            <sequence key="validateBillGetPayload"/>
+
+            <!-- Optional: Log if validation passed -->
+            <log level="custom">
+                <property name="Info" value="Validation passed in API inSequence"/>
+            </log>
+
+            <!-- Respond to client -->
+            <respond/>
+        </inSequence>
+
+        <outSequence>
+            <log level="full"/>
+        </outSequence>
+
+        <faultSequence>
+            <log level="full"/>
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "returnCode": "ERROR",
+                        "ticketId": "$ctx:ticketId",
+                        "traceId": "$ctx:traceId",
+                        "feedbacks": [
+                            {
+                                "code": "$ctx:errorCode",
+                                "label": "$ctx:errorMessage",
+                                "severity": "ERROR",
+                                "type": "BUS",
+                                "source": "$ctx:source",
+                                "origin": "$ctx:applicationCode",
+                                "spanId": "$ctx:spanId",
+                                "parameters": [
+                                    {
+                                        "code": "0",
+                                        "value": "$ctx:parameterValue"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                </format>
+                <args>
+                    <arg evaluator="xml" expression="get-property('ticketId')"/>
+                    <arg evaluator="xml" expression="get-property('traceId')"/>
+                    <arg evaluator="xml" expression="get-property('errorCode')"/>
+                    <arg evaluator="xml" expression="get-property('errorMessage')"/>
+                    <arg evaluator="xml" expression="get-property('source')"/>
+                    <arg evaluator="xml" expression="get-property('applicationCode')"/>
+                    <arg evaluator="xml" expression="get-property('spanId')"/>
+                    <arg evaluator="xml" expression="get-property('parameterValue')"/>
+                </args>
+            </payloadFactory>
+        </faultSequence>
+    </resource>
+</api>
