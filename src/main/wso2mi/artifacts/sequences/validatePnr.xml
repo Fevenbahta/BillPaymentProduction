@@ -1,0 +1,287 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="validatePNRSequence" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+    <!-- Save original headers at start -->
+<property name="ORIGINAL_AUTHORIZATION" expression="get-property('transport','Authorization')" scope="default"/>
+<property name="ORIGINAL_CONTENT_TYPE" expression="get-property('transport','Content-Type')" scope="default"/>
+<!-- Add more headers as needed -->
+
+
+    <!-- Save original payload at start -->
+    <enrich>
+        <source clone="true" type="body"/>
+        <target type="property" property="ORIGINAL_PAYLOAD"/>
+    </enrich>
+
+    <log level="full">
+        <property name="Status" value="Calling validatePNRSequence Credentials"/>
+    </log>
+
+    <property name="validatePNRSequence" value="in validatePNRSequence" scope="default"/>
+    <property name="orderId" expression="get-property('OrderId')" scope="default"/>
+    <property name="shortCode" value="526341" scope="default"/>
+
+    <!-- Validate orderId -->
+    <filter xpath="not(get-property('orderId'))">
+        <then>
+            <property name="ERROR_MESSAGE" value="customerCode is required" scope="default"/>
+            <log level="custom">
+                <property name="ValidationError" value="Missing orderId"/>
+            </log>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <property name="ticketId" value="TICKET34567" scope="default"/>
+            <property name="traceId" value="TRACE1235566" scope="default"/>
+            <property name="spanId" value="SPAN123" scope="default"/>
+            <property name="errorCode" value="SB_DS_001" scope="default"/>
+            <property name="errorMessage" value="Validation failed" scope="default"/>
+            <property name="source" value="validatePNRPayload" scope="default"/>
+            <property name="applicationCode" value="WSO2-MI" scope="default"/>
+            <property name="parameterValue" value="Missing or invalid field(s): uniqueCode" scope="default"/>
+
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "returnCode": "ERROR",
+                        "ticketId": "$ctx:ticketId",
+                        "traceId": "$ctx:traceId",
+                        "feedbacks": [
+                            {
+                                "code": "$ctx:errorCode",
+                                "label": "$ctx:errorMessage",
+                                "severity": "ERROR",
+                                "type": "BUS",
+                                "source": "$ctx:source",
+                                "origin": "$ctx:applicationCode",
+                                "spanId": "$ctx:spanId",
+                                "parameters": [
+                                    {
+                                        "code": "0",
+                                        "value": "$ctx:parameterValue"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                </format>
+                <args>
+                    <arg expression="get-property('ticketId')"/>
+                    <arg expression="get-property('traceId')"/>
+                    <arg expression="get-property('errorCode')"/>
+                    <arg expression="get-property('errorMessage')"/>
+                    <arg expression="get-property('source')"/>
+                    <arg expression="get-property('applicationCode')"/>
+                    <arg expression="get-property('spanId')"/>
+                    <arg expression="get-property('parameterValue')"/>
+                </args>
+            </payloadFactory>
+
+            <property name="messageType" value="application/json" scope="axis2"/>
+            <drop/>
+            <respond/>
+        </then>
+    </filter>
+
+    <log level="full">
+        <property name="Step" value="Start etgetbillSequence"/>
+        <property name="orderId" expression="get-property('orderId')"/>
+        <property name="shortCode" expression="get-property('shortCode')"/>
+    </log>
+
+    <!-- Set call properties -->
+    <header name="Content-Type" value="application/json" scope="transport"/>
+    <property name="HTTP_METHOD" value="POST" scope="axis2"/>
+    <property name="REST_URL_POSTFIX" value="/api/topUp/recharge" scope="axis2" type="STRING"/>
+    <property name="OUT_ONLY" value="false" scope="default" type="BOOLEAN"/>
+    <property name="uri.var.orderId" expression="get-property('orderId')" scope="default"/>
+    <property name="uri.var.shortCode" expression="get-property('shortCode')" scope="default"/>
+    <property name="Accept" value="application/json" scope="transport"/>
+    <property name="messageType" value="application/json" scope="axis2"/>
+    <property name="Content-Type" value="application/json" scope="transport"/>
+
+    <script language="js"><![CDATA[
+        mc.setProperty("authString", "lionbanktest@ethiopianairlines.com:LI*&%@54778Ba");
+    ]]></script>
+
+    <header name="Authorization" expression="fn:concat('Basic ', base64Encode(get-property('authString')))" scope="transport"/>
+
+    <!-- <call>
+        <endpoint>
+            <http method="GET"
+                  uri-template="http://flygateapitestvpn.azurewebsites.net/Lion/api/V1.0/Lion/GetOrder?orderId={uri.var.orderId}&amp;shortCode={uri.var.shortCode}"/>
+        </endpoint>
+    </call> -->
+<call>
+    <endpoint key="airlinesGetOrderEP"/>
+</call>
+
+
+     <property name="amount" expression="json-eval($.amount)"/>
+    <log level="full">
+        <property name="Step" value="Received Response"/>
+        <property name="HTTP Status" expression="get-property('HTTP_SC')"/>
+        <property name="ResponsePayload" expression="json-eval($.)"/>
+    </log>
+
+    <filter source="get-property('HTTP_SC')" regex="200">
+        <then>
+            <log level="custom">
+                <property name="getStatus" value="Success"/>
+            </log>
+        </then>
+        <else>
+            <log level="custom">
+                <property name="getStatus" value="Failed"/>
+                <property name="HTTP Status" expression="get-property('HTTP_SC')"/>
+            </log>
+            <property name="error" value="getbill infor from airlines failed. HTTP status not 200" scope="default"/>
+        </else>
+    </filter>
+
+
+
+<!-- Convert both amounts to numbers with 4 decimal places for consistent comparison -->
+<property name="amountFormatted" expression="number(get-property('amount'))" scope="default"/>
+<property name="requestedAmountFormatted" expression="number(get-property('Amount'))" scope="default"/>
+
+<!-- Compare the numeric values -->
+<filter xpath="number(get-property('amountFormatted')) = number(get-property('requestedAmountFormatted'))">
+    <then>
+        <!-- amounts match, continue -->
+        <log level="custom">
+            <property name="AmountCheck" value="Matched"/>
+        </log>
+    </then>
+    <else>
+        <!-- amounts do not match, throw error -->
+        <log level="custom">
+            <property name="AmountCheck" value="Mismatch"/>
+        </log>
+        <property name="HTTP_SC" value="400" scope="axis2"/>
+        <property name="errorCode" value="SB_DS_002" scope="default"/>
+        <property name="errorMessage" value="Amount mismatch" scope="default"/>
+        <property name="parameterValue" expression="fn:concat('Requested: ', get-property('Amount'), ', Actual: ', get-property('amount'))" scope="default"/>
+
+        <payloadFactory media-type="json">
+            <format>
+                {
+                    "returnCode": "ERROR",
+                    "feedbacks": [
+                        {
+                            "code": "$ctx:errorCode",
+                            "label": "$ctx:errorMessage",
+                            "severity": "ERROR",
+                            "type": "BUS",
+                            "source": "validatePNRAmountCheck",
+                            "origin": "WSO2-MI",
+                            "parameters": [
+                                {
+                                    "code": "amountMismatch",
+                                    "value": "$ctx:parameterValue"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            </format>
+            <args>
+                <arg expression="get-property('errorCode')"/>
+                <arg expression="get-property('errorMessage')"/>
+                <arg expression="get-property('parameterValue')"/>
+            </args>
+        </payloadFactory>
+
+        <property name="messageType" value="application/json" scope="axis2"/>
+        <respond/>
+        <drop/>
+    </else>
+</filter>
+
+    <script language="js"><![CDATA[
+        var response = mc.getPayloadJSON();
+        if (response.statusCodeResponse == 1) {
+            mc.setProperty("response_status", "success");
+            var success = [
+                {
+                    "status": "0",
+                    "providerId": "526341",
+                    "invoiceId": response.traceNumber,
+                    "invoiceIdentificationValue": "INVD" + response.traceNumber,
+                    "invoiceAmount": response.amount.toFixed(4),
+                    "currencyAlphaCode": "ETB",
+                    "currencyDesignation": "ETHIOPIAN BIRR",
+                    "customerName": response.customerName,
+                    "providerName": response.utilityName
+                }
+            ];
+            mc.setPayloadJSON(success);
+            mc.setProperty("HTTP_SC", 200);
+        } else {
+            mc.setProperty("response_status", "error");
+            var error = {
+                "returnCode": "ERROR",
+                "ticketId": "247f4b-5d7b-4d32-a1db-f893edaa38a7",
+                "traceId": "92e9013d25cca084",
+                "feedbacks": [
+                    {
+                        "code": "SB_DS_001",
+                        "label": "Validation failed",
+                        "severity": "ERROR",
+                        "type": "BUS",
+                        "source": "validateBillGetPayload",
+                        "origin": "WSO2-MI",
+                        "spanId": "92e9013d",
+                        "parameters": [
+                            {
+                                "code": "0",
+                                "value": response.statusCodeResponseDescription
+                            }
+                        ]
+                    }
+                ]
+            };
+            mc.setPayloadJSON(error);
+        }
+    ]]></script>
+
+    <filter source="get-property('response_status')" regex="success">
+        <then>
+            <log level="full"/>
+            
+            <!-- Remove all custom call headers and properties -->
+            <property name="HTTP_METHOD" scope="axis2" action="remove"/>
+            <property name="REST_URL_POSTFIX" scope="axis2" action="remove"/>
+            <property name="Content-Type" scope="transport" action="remove"/>
+            <property name="Accept" scope="transport" action="remove"/>
+            <property name="messageType" scope="axis2" action="remove"/>
+            <property name="Authorization" scope="transport" action="remove"/>
+
+            <!-- Restore original headers -->
+ <!-- Save headers -->
+
+<!-- Your processing here -->
+
+<!-- Restore headers -->
+<header name="Authorization" expression="get-property('ORIGINAL_AUTHORIZATION')" scope="transport"/>
+<header name="Content-Type" expression="get-property('ORIGINAL_CONTENT_TYPE')" scope="transport"/>
+
+
+            <!-- Restore original payload -->
+            <enrich>
+                <source type="property" property="ORIGINAL_PAYLOAD"/>
+                <target type="body"/>
+            </enrich>
+
+        </then>
+        <else>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+            <property name="validatePNRSequence" value="in validatePNRSequence" scope="default"/>
+        </else>
+    </filter>
+
+    <log level="full">
+        <property name="Status" value="Exiting validatePNRSequence"/>
+        <property name="validatePNRSequence" expression="get-property('validatePNRSequence')"/>
+    </log>
+
+</sequence>

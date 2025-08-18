@@ -39,7 +39,7 @@
                                 <amp:providerId>$3</amp:providerId>
                                 <amp:invoiceIdentification>
                                     <amp:providerComponentIdentification>
-                                        <amp:identifierNumber>2</amp:identifierNumber>
+                                        <amp:identifierNumber>1</amp:identifierNumber>
                                         <amp:identifierValue>$4</amp:identifierValue>
                                     </amp:providerComponentIdentification>
                                 </amp:invoiceIdentification>
@@ -63,11 +63,14 @@
     </log>
 
     <!-- Send the SOAP request -->
-    <call>
+    <!-- <call>
         <endpoint>
             <address format="soap11" uri="https://10.1.7.85:8095/getECInvoiceDetail"/>
         </endpoint>
-    </call>
+    </call> -->
+<call>
+    <endpoint key="getECInvoiceDetailEP"/>
+</call>
 
     <!-- Log full SOAP response -->
     <log level="full">
@@ -75,12 +78,38 @@
     </log>
 
     <!-- Extract response code -->
-    <log level="custom">
+   
     <property name="responseCode" expression="//amp:responseStatus/amp:statusCode/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
-<property name="getECInvoiceDetailResponse" expression="//amp:getECInvoiceDetailResponse/amp:providerId/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+<property name="getECInvoiceDetailResponse" expression="//amp:getECInvoiceDetailResponse/amp:invoiceId/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+   <log level="custom">
+    <property name="responseCode" expression="//amp:responseStatus/amp:statusCode/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
+<property name="getECInvoiceDetailResponse" expression="//amp:getECInvoiceDetailResponse/amp:invoiceId/text()" scope="default" xmlns:amp="http://soprabanking.com/amplitude"/>
     </log>
+<script language="js"><![CDATA[
+    var responseCode = mc.getProperty("responseCode");
+    var providerId = mc.getProperty("getECInvoiceDetailResponse");
+
+    if (
+        responseCode === "0" &&
+        providerId !== null &&
+        providerId !== undefined &&
+        providerId.trim().length > 0 &&
+        providerId.trim().toLowerCase() !== "null"
+    ) {
+        mc.setProperty("filterPassed", true);
+    } else {
+        mc.setProperty("filterPassed", false);
+    }
+]]></script>
+
+<log level="custom">
+    <property name="responseCode" expression="get-property('responseCode')"/>
+    <property name="getECInvoiceDetailResponse" expression="get-property('getECInvoiceDetailResponse')"/>
+    <property name="filterPassed" expression="get-property('filterPassed')"/>
+</log>
+
     <!-- Filter success or failure -->
-   <filter xpath="//amp:responseStatus/amp:statusCode/text() = '0' and string-length(get-property('getECInvoiceDetailResponse')) > 0 " xmlns:amp="http://soprabanking.com/amplitude">
+<filter source="get-property('filterPassed')" regex="true">
        <then>
             <!-- Success: Transform SOAP response to JSON -->
 <payloadFactory media-type="json">
@@ -149,7 +178,7 @@
             <dbreport>
                 <connection>
                     <pool>
-                        <dsName>jdbc/PostgresDB</dsName>
+                        <dsName>jdbc/DbsBillPaymentDB</dsName>
                     </pool>
                 </connection>
                 <statement>
@@ -248,7 +277,7 @@
                <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/PostgresDB</dsName>
+                    <dsName>jdbc/DbsBillPaymentDB</dsName>
                 </pool>
             </connection>
             <statement>
@@ -289,7 +318,7 @@
 <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/PostgresDB</dsName>
+                    <dsName>jdbc/DbsBillPaymentDB</dsName>
                 </pool>
             </connection>
             <statement>

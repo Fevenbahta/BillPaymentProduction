@@ -1,0 +1,256 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="awachGetBillSequence" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+    <!-- Extract request fields -->
+    <property name="uniqueCode" expression="json-eval($.uniqueCode)" scope="default"/>
+    <property name="shortCode" value="526341" scope="default"/>
+    <property name="orderId" expression="json-eval($.uniqueCode)" scope="default"/>
+
+<log>
+     <property name="uniqueCode" expression="json-eval($.uniqueCode)" scope="default"/>
+    <property name="shortCode" value="526341" scope="default"/>
+    <property name="orderId" expression="json-eval($.uniqueCode)" scope="default"/>
+
+</log>
+    <!-- Validate orderId -->
+    <filter xpath="not(get-property('orderId'))">
+        <then>
+            <property name="ERROR_MESSAGE" value="uniqueCode is required" scope="default"/>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <property name="ticketId" value="TICKET123" scope="default"/>
+            <property name="traceId" value="TRACE123" scope="default"/>
+            <property name="spanId" value="SPAN123" scope="default"/>
+            <property name="errorCode" value="SB_DS_001" scope="default"/>
+            <property name="errorMessage" value="Validation failed" scope="default"/>
+            <property name="source" value="validateEtBillGetPayload" scope="default"/>
+            <property name="applicationCode" value="WSO2-MI" scope="default"/>
+            <property name="parameterValue" value="Missing or invalid field(s): uniqueCode" scope="default"/>
+
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "returnCode": "ERROR",
+                        "ticketId": "$ctx:ticketId",
+                        "traceId": "$ctx:traceId",
+                        "feedbacks": [
+                            {
+                                "code": "$ctx:errorCode",
+                                "label": "$ctx:errorMessage",
+                                "severity": "ERROR",
+                                "type": "BUS",
+                                "source": "$ctx:source",
+                                "origin": "$ctx:applicationCode",
+                                "spanId": "$ctx:spanId",
+                                "parameters": [
+                                    {
+                                        "code": "0",
+                                        "value": "$ctx:parameterValue"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                </format>
+            </payloadFactory>
+
+            <property name="messageType" value="application/json" scope="axis2"/>
+            <drop/>
+            <respond/>
+        </then>
+    </filter>
+
+    <!-- Log start -->
+    <log level="full">
+        <property name="Step" value="Start awachgetbillSequence"/>
+        <property name="orderId" expression="get-property('orderId')"/>
+        <property name="shortCode" expression="get-property('shortCode')"/>
+    </log>
+
+    <!-- OAuth2 Token Request -->
+     
+          <script language="js"><![CDATA[
+    mc.setProperty("authString", "rhe3CQg0NJZbBxS2D8MFCYJfKKsa:LaUCrsUYDIxnnkcu8tYIRz8f7xYa");
+  ]]></script>
+
+  <header name="Authorization" expression="fn:concat('Basic ', base64Encode(get-property('authString')))" scope="transport"/>
+
+ <property name="Content-Type" value="application/json" scope="transport"/>
+<payloadFactory media-type="xml">
+    <format>
+        <auth>
+            <grant_type>client_credentials</grant_type>
+                  </auth>
+    </format>
+</payloadFactory>
+
+<!-- <header name="Content-Type" scope="transport" value="application/x-www-form-urlencoded"/> -->
+<property name="messageType" scope="axis2" type="STRING" value="application/x-www-form-urlencoded"/>
+    <property name="DISABLE_CHUNKING" scope="axis2" type="STRING" value="true"/>
+   <log level="full"/>
+<!-- <call>
+    <endpoint>
+        <http method="POST" uri-template="https://developer-uat.anbesabank.et/oauth2/token"/>
+    </endpoint>
+</call> -->
+
+<call>
+    <endpoint key="oauth2TokenEP"/>
+</call>
+
+
+<log level="full"/>
+
+    <!-- Step 2: Extract token from JSON response -->
+<property name="access_token" expression="json-eval($.access_token)" scope="default"/>
+
+    <property name="accessToken" expression="json-eval($.access_token)" scope="default"/>
+    <log level="custom">
+        <property name="AccessToken" expression="get-property('accessToken')"/>
+    </log>
+
+    <!-- Call Awach API -->
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "memberId": "$1",
+                "channel": "DBS"
+            }
+        </format>
+        <args>
+            <arg expression="get-property('uniqueCode')"/>
+        </args>
+    </payloadFactory>
+
+    <header name="Content-Type" value="application/json" scope="transport"/>
+    <header name="Accept" value="application/json" scope="transport"/>
+    <header name="Authorization" expression="fn:concat('Bearer ', get-property('accessToken'))" scope="transport"/>
+
+    <!-- <call>
+        <endpoint>
+            <http method="POST"
+                  uri-template="https://api-in-uat.anbesabank.et/awach/1.0.0/validateAwachMember"/>
+        </endpoint>
+    </call> -->
+    <call>
+    <endpoint key="validateAwachMemberEP"/>
+</call>
+
+
+    <!-- Save raw response to statusResponse -->
+    <property name="statusResponse" expression="json-eval($.)" scope="default"/>
+
+    <!-- Extract fields -->
+    <property name="customerName" expression="json-eval($.FullName)" scope="default"/>
+    <property name="referenceId" expression="json-eval($.referenceId)" scope="default"/>
+    <property name="status" expression="json-eval($.responseCode)" scope="default"/>
+    <property name="statusCode" expression="json-eval($.responseCode)" scope="default"/>
+    <property name="lionTransactionNo" expression="json-eval($.lionTransactionNo)" scope="default"/>
+    <property name="errors" expression="json-eval($.Errors)" scope="default"/>
+    <property name="billerType" value="Awach" scope="default"/>
+    <property name="phoneNumber" expression="json-eval($.phoneNumber)" scope="default"/>
+    <property name="accountNo" expression="json-eval($.accountNo)" scope="default"/>
+
+    <!-- Format Dates -->
+    <script language="js"><![CDATA[
+        var currentDate = new Date();
+        var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0];
+        mc.setProperty('currentDate', formattedDate);
+    ]]></script>
+
+    <!-- Save to DB -->
+    <dbreport>
+        <connection>
+            <pool>
+                <dsName>jdbc/DbsBillPaymentDB</dsName>
+            </pool>
+        </connection>
+        <statement>
+            <sql>
+                INSERT INTO public."awachorder" (
+                    "OrderId", "ShortCode", "Amount","StatusCodeResponse",
+                    "CustomerName", "Status", "RequestDate", "ReferenceId",
+                    "StatusCode", "LionTransactionNo", "Errors", "BillerType",
+                    "PhoneNumber", "AccountNo"
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+            </sql>
+            <parameter expression="get-property('orderId')" type="VARCHAR"/>
+            <parameter expression="get-property('shortCode')" type="VARCHAR"/>
+            <parameter expression="get-property('amount')" type="DECIMAL"/>
+            <parameter expression="get-property('statusResponse')" type="VARCHAR"/>
+                <parameter expression="get-property('customerName')" type="VARCHAR"/>
+            <parameter expression="get-property('status')" type="NUMERIC"/>
+            <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+            <parameter expression="get-property('referenceId')" type="VARCHAR"/>
+            <parameter expression="get-property('statusCode')" type="NUMERIC"/>
+            <parameter expression="get-property('lionTransactionNo')" type="VARCHAR"/>
+            <parameter expression="get-property('errors')" type="VARCHAR"/>
+            <parameter expression="get-property('billerType')" type="VARCHAR"/>
+            <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+            <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+               </statement>
+    </dbreport>
+
+    <!-- Handle response -->
+    <script language="js"><![CDATA[
+        var response = mc.getPayloadJSON();
+
+        if (response.responseCode == 200) {
+            mc.setProperty("response_status", "success");
+            var success = [
+                {
+                    "status": "0",
+                    "providerId": "526341",
+                    "invoiceId": response.refNo,
+                    "invoiceIdentificationValue": response.refNo,
+                    "invoiceAmount": 0,
+                    "currencyAlphaCode": "ETB",
+                    "currencyDesignation": "ETHIOPIAN BIRR",
+                    "customerName": response.fullName,
+                    "providerName": "Awach"
+                }
+            ];
+            mc.setPayloadJSON(success);
+            mc.setProperty("HTTP_SC", 200);
+        } else {
+            mc.setProperty("response_status", "error");
+            mc.setProperty("statusResponse", JSON.stringify(response)); // Store error payload
+            var error = {
+                "returnCode": "ERROR",
+                "ticketId": "247f4b-5d7b-4d32-a1db-f893edaa38a7",
+                "traceId": "92e9013d25cca084",
+                "feedbacks": [
+                    {
+                        "code": "SB_DS_001",
+                        "label": "Validation failed",
+                        "severity": "ERROR",
+                        "type": "BUS",
+                        "source": "validateBillGetPayload",
+                        "origin": "WSO2-MI",
+                        "spanId": "92e9013d",
+                        "parameters": [
+                            {
+                                "code": "0",
+                                "value": response.statusCodeResponseDescription
+                            }
+                        ]
+                    }
+                ]
+            };
+            mc.setPayloadJSON(error);
+        }
+    ]]></script>
+
+    <!-- Set HTTP code -->
+    <filter source="get-property('response_status')" regex="success">
+        <then>
+            <property name="HTTP_SC" value="200" scope="axis2"/>
+        </then>
+        <else>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+        </else>
+    </filter>
+
+    <respond/>
+
+</sequence>

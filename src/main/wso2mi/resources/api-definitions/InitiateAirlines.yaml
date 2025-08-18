@@ -1,10 +1,10 @@
 openapi: 3.0.1
 info:
-  title: ecPayment
-  description: API Definition of ecPayment
+  title: InitiateAirlinesPayment
+  description: API Definition of InitiateAirlinesPayment
   version: 1.0.0
 servers:
-- url: http://localhost:8290/ecPayment
+- url: http://localhost:8290/initiateairlinespayment
 paths:
   /:
     post:

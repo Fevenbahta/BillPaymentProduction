@@ -1,21 +1,212 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <api context="/getbill" name="getbill" xmlns="http://ws.apache.org/ns/synapse">
     <resource methods="POST" uri-template="/">
-        <inSequence>
-            <log level="custom">
-                <property name="Info" value="Calling validateBillGetPayload sequence"/>
-            </log>
-            <!-- Call your custom validation sequence -->
-            <sequence key="validateBillGetPayload"/>
+      <inSequence>
+    <log level="custom">
+        <property name="Info" value="Calling validateBillGetPayload sequence"/>
+    </log>
+    <property name="billerType" expression="json-eval($.billerType)"/>
 
-            <!-- Optional: Log if validation passed -->
-            <log level="custom">
-                <property name="Info" value="Validation passed in API inSequence"/>
-            </log>
 
-            <!-- Respond to client -->
+                
+<script language="js">
+    var payload = mc.getPayloadJSON();
+    var billerType = payload.billerType;
+    
+    // Validation logic: Ensure required fields are present and valid
+    var missingFields = [];
+    var invalidFields = [];
+    
+    // Check for required fields
+    if (!billerType) {
+        missingFields.push("billerType");
+    } else {
+        // Validate billerType against allowed values
+         var allowedBillers = ["et", "water", "school", "dstv", "topup","awach"];
+        if (allowedBillers.indexOf(billerType.toLowerCase()) === -1) {
+            invalidFields.push("billerType");
+        }    }
+   
+    // If any fields are missing or invalid, set error response
+    if (missingFields.length > 0 || invalidFields.length > 0) {
+        mc.setProperty("errorCode", "400");
+        var errorMessage = "";
+        
+        if (missingFields.length > 0) {
+            errorMessage += "The following fields are missing: " + missingFields.join(", ");
+        }
+        
+        if (invalidFields.length > 0) {
+            if (missingFields.length > 0) errorMessage += ". ";
+            errorMessage += "The following fields are invalid: " + invalidFields.join(", ");
+            // Changed from includes() to indexOf()
+            if (invalidFields.indexOf("billerType") !== -1) {
+                errorMessage += " (valid values are ET, water, school, dstv, topup)";
+            }
+        }
+        
+        mc.setProperty("errorMessage", errorMessage);
+
+        // Create a dynamic error message based on missing/invalid fields
+        var errorResponse = {
+            "returnCode": "ERROR",
+            "ticketId": "247f4b-5d7b-4d32-a1db-f893edaa38a7",
+            "traceId": "92e9013d25cca084",
+            "feedbacks": [
+                {
+                    "code": "SB_DS_001",
+                    "label": "Validation failed",
+                    "severity": "ERROR",
+                    "type": "BUS",
+                    "source": "validateBillGetPayload",
+                    "origin": "WSO2-MI",
+                    "spanId": "92e9013d",
+                    "parameters": [
+                        {
+                            "code": "0",
+                            "value": errorMessage
+                        }
+                    ]
+                }
+            ],
+        };
+
+        mc.setPayloadJSON(errorResponse);
+        mc.setProperty("terminateFlow", "true");
+    }
+</script>
+
+
+ <switch source="get-property('terminateFlow')">
+    <case regex="true">
+          <property name="HTTP_SC" value="400" scope="axis2" type="INTEGER"/>
+   
+        <!-- Log when the flow is terminated due to validation failure -->
+        <log level="custom">
+            <property name="Info" value="Validation failed, terminating flow."/>
+        </log>
+        <!-- Stop the flow if validation fails -->
+        <respond/>
+    </case>
+    <default></default></switch>
+
+
+<script language="js"><![CDATA[
+    function mediate(mc) {
+        var payload = mc.getPayloadJSON();
+
+        var billerType = "";
+
+        if (payload && typeof payload.billerType === "string") {
+            billerType = payload.billerType;
+        }
+
+       
+        if (!billerType || billerType.trim() === "") {
+            mc.setProperty("isBillerTypeMissing", "true");
+        } else {
+            mc.setProperty("isBillerTypeMissing", "false");
+        }
+
+        return true; // Required
+    }
+]]></script>
+
+<log level="custom">
+    <property name="BillerType (from property)" expression="get-property('billerType')"/>
+</log>
+
+<filter source="get-property('isBillerTypeMissing')" regex="true">
+        <then>
+            <!-- Set error details -->
+            <property name="ticketId" value="TICKET123" scope="default"/>
+            <property name="traceId" value="TRACE123" scope="default"/>
+            <property name="spanId" value="SPAN123" scope="default"/>
+            <property name="errorCode" value="SB_DS_001" scope="default"/>
+            <property name="errorMessage" value="Validation failed" scope="default"/>
+            <property name="source" value="validateBillGetPayload" scope="default"/>
+            <property name="applicationCode" value="WSO2-MI" scope="default"/>
+            <property name="parameterValue" value="Missing or invalid field(s): billerType" scope="default"/>
+
+            <!-- Error response -->
+       <payloadFactory media-type="json">
+    <format>
+        {
+            "returnCode": "ERROR",
+            "ticketId": "$1",
+            "traceId": "$2",
+            "feedbacks": [
+                {
+                    "code": "$3",
+                    "label": "$4",
+                    "severity": "ERROR",
+                    "type": "BUS",
+                    "source": "$5",
+                    "origin": "$6",
+                    "spanId": "$7",
+                    "parameters": [
+                        {
+                            "code": "0",
+                            "value": "$8"
+                        }
+                    ]
+                }
+            ]
+        }
+    </format>
+    <args>
+        <arg expression="get-property('ticketId')" />
+        <arg expression="get-property('traceId')" />
+        <arg expression="get-property('errorCode')" />
+        <arg expression="get-property('errorMessage')" />
+        <arg expression="get-property('source')" />
+        <arg expression="get-property('applicationCode')" />
+        <arg expression="get-property('spanId')" />
+        <arg expression="get-property('parameterValue')" />
+    </args>
+</payloadFactory>
+
+            <property name="messageType" value="application/json" scope="axis2"/>
             <respond/>
-        </inSequence>
+            <drop/>
+        </then>
+    </filter>
+
+    <!-- If billerType is present, route to correct sequence -->
+<filter source="get-property('billerType')" regex="ET">
+    <then>
+        <log level="custom">
+            <property name="Routing" value="Matched: billerType is ET"/>
+        </log>
+        <sequence key="etGetBillSequence"/>
+    </then>
+    <else>
+        <!-- Now check for AWACH -->
+        <filter source="get-property('billerType')" regex="awach">
+            <then>
+                <log level="custom">
+                    <property name="Routing" value="Matched: billerType is AWACH"/>
+                </log>
+                <sequence key="awachGetBillSequence"/>
+            </then>
+            <else>
+                <log level="custom">
+                    <property name="Routing" expression="fn:concat('Default route: billerType = ', get-property('billerType'))"/>
+                </log>
+                <sequence key="validateBillGetPayloadVite"/>
+            </else>
+        </filter>
+    </else>
+</filter>
+
+
+
+    <log level="custom">
+        <property name="Info" value="Validation passed in API inSequence"/>
+    </log>
+
+    <respond/>
+</inSequence>
 
         <outSequence>
             <log level="full"/>

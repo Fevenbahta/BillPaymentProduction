@@ -1,0 +1,105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="decodeAndValidateTokenSeq" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+
+    <!-- Extract Authorization header as-is -->
+    <property name="authToken" expression="get-property('transport', 'Authorization')" scope="default"/>
+    <property name="acceptHeader" expression="get-property('transport', 'Accept')" scope="default"/>
+
+    <!-- Remove Accept header if it's application/json -->
+    <filter source="get-property('acceptHeader')" regex="application/json">
+        <then>
+          <header name="Accept" action="remove" scope="transport"/>
+
+            <log level="custom">
+                <property name="HeaderRemoved" value="Accept header removed"/>
+            </log>
+        </then>
+    </filter>
+    <!-- JWT validation script -->
+    <script language="js"><![CDATA[
+        var rawAuthHeader = mc.getProperty('authToken');
+        
+        // Accept "Bearer <token>" or just "<token>"
+        var token = rawAuthHeader ? rawAuthHeader.replace(/^Bearer\s+/i, '').trim() : '';
+
+        function base64UrlDecode(str) {
+            return new Packages.java.lang.String(
+                Packages.java.util.Base64.getUrlDecoder().decode(str),
+                "UTF-8"
+            );
+        }
+
+        var httpClient = null;
+        try {
+            var parts = token.split(".");
+            if (parts.length !== 3) {
+                throw new Error("Invalid JWT structure");
+            }
+
+            var header = JSON.parse(base64UrlDecode(parts[0]));
+            var payload = JSON.parse(base64UrlDecode(parts[1]));
+            var kid = header.kid;
+
+            var currentTime = Math.floor(new Date().getTime() / 1000);
+            if (!payload.exp || currentTime >= payload.exp) {
+                throw new Error("Token has expired");
+            }
+
+            var jwksUrl = 'https://idp.uat.anbesabank.et/auth/realms/neo-customer/protocol/openid-connect/certs';
+            httpClient = Packages.org.apache.http.impl.client.HttpClients.createDefault();
+            var response = httpClient.execute(new Packages.org.apache.http.client.methods.HttpGet(jwksUrl));
+            var jwks = JSON.parse(Packages.org.apache.http.util.EntityUtils.toString(response.getEntity()));
+
+            var key = jwks.keys.filter(function(k) {
+                return k.kid === kid && k.use === 'sig' && k.kty === 'RSA';
+            })[0];
+
+            if (!key) {
+                throw new Error("No matching RSA key found for kid: " + kid);
+            }
+
+            var jwkJson = JSON.stringify(key);
+            var jwk = Packages.com.nimbusds.jose.jwk.JWK.parse(jwkJson);
+            var rsaKey = jwk.toRSAKey();
+            var publicKey = rsaKey.toPublicKey();
+
+            var verifier = new Packages.com.nimbusds.jose.crypto.RSASSAVerifier(publicKey);
+            var signedJWT = Packages.com.nimbusds.jwt.SignedJWT.parse(token);
+
+            if (!signedJWT.verify(verifier)) {
+                throw new Error("Invalid token signature");
+            }
+
+            mc.setProperty("isValid", "true");
+            mc.setProperty("header", JSON.stringify(header));
+            mc.setProperty("payload", JSON.stringify(payload));
+
+        } catch (e) {
+            mc.setProperty("isValid", "false");
+            mc.setProperty("errorMessage", e.message);
+        } finally {
+            if (httpClient !== null) {
+                try { httpClient.close(); } catch (e) {}
+            }
+        }
+    ]]></script>
+
+    <!-- Error response if invalid -->
+    <filter source="get-property('isValid')" regex="false">
+        <then>
+            <payloadFactory media-type="json">
+                <format>{"status": "invalid", "error": "$1"}</format>
+                <args>
+                    <arg evaluator="xml" expression="get-property('errorMessage')"/>
+                </args>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </then>
+        <else>
+            <log level="full"/>
+        </else>
+    </filter>
+
+</sequence>

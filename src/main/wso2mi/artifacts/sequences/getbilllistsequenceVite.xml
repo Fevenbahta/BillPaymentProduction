@@ -1,0 +1,410 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="getbilllistsequenceVite" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+    <!-- Logging initial info -->
+    <log level="custom">
+        <property name="Info" value="Inside getbilllistsequenceVite"/>
+    </log>
+
+    <log level="full">
+        <property name="Starting REST Request" value="Sending request to query bills."/>
+    </log>
+    
+    <script language="js">
+        var currentDate = new Date();
+        var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0];
+        mc.setProperty('currentDate', formattedDate);
+    </script>
+
+    <!-- Extract parameters from incoming payload -->
+    <property name="phoneNumber" expression="json-eval($.phoneNumber)" scope="default"/>
+    <property name="billerType" expression="json-eval($.billerType)" scope="default"/>
+    <property name="referenceNo" expression="json-eval($.referenceNo)" scope="default"/>
+    <property name="accountNo" expression="json-eval($.accountNo)" scope="default"/>
+
+    <!-- Log the extracted parameters -->
+    <log level="custom">
+        <property name="Extracted Parameters" expression="fn:concat('Phone: ', $ctx:phoneNumber, ', BillerType: ', $ctx:billerType)"/>
+    </log>
+
+
+
+<!-- Check if billerType is 'topup' -->
+<filter xpath="get-property('billerType') = 'TopUp'">
+    <then>
+        <log level="custom">
+            <property name="Info" value="BillerType is 'topup', saving and responding directly"/>
+        </log>
+
+
+
+<script language="js">
+            <![CDATA[
+                function generateId(length) {
+                    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                    var id = '';
+                    for (var i = 0; i < length; i++) {
+                        id += chars.charAt(Math.floor(Math.random() * chars.length));
+                    }
+                    return id;
+                }
+                mc.setProperty("GeneratedInvoiceId", generateId(8));
+            ]]>
+        </script>
+
+        <!-- Check if it already exists in DB -->
+    <dblookup>
+    <connection>
+        <pool>
+            <dsName>jdbc/DbsBillPaymentDB</dsName>
+        </pool>
+    </connection>
+    <statement>
+        <sql>
+            SELECT "InvoiceId" FROM public."BillGetRequests" WHERE "InvoiceId" = ARRAY[?]::text[]
+        </sql>
+        <parameter expression="get-property('GeneratedInvoiceId')" type="VARCHAR"/>
+        <result name="ExistingInvoiceId" column="InvoiceId"/>
+    </statement>
+</dblookup>
+
+        <!-- If exists, reject or handle retry (here: simple error) -->
+        <filter source="boolean(get-property('ExistingInvoiceId'))" regex="true">
+   <then>
+                <log level="custom">
+                    <property name="Error" value="Duplicate InvoiceId generated. Try again."/>
+                </log>
+                <property name="HTTP_SC" value="500" scope="axis2"/>
+                <payloadFactory media-type="json">
+                    <format>{ "error": "Duplicate InvoiceId. Please retry." }</format>
+                </payloadFactory>
+                
+<script language="js">
+            <![CDATA[
+                function generateId(length) {
+                    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+                    var id = '';
+                    for (var i = 0; i < length; i++) {
+                        id += chars.charAt(Math.floor(Math.random() * chars.length));
+                    }
+                    return id;
+                }
+                mc.setProperty("GeneratedInvoiceId", generateId(8));
+            ]]>
+        </script>
+               
+            </then>
+<else/></filter>
+
+
+        <!-- Set success properties -->
+        <property name="status" value="success" scope="default"/>
+        <property name="responseError" value="false" scope="default"/>
+        <property name="ResProviderId" value="LOCAL_TOPUP" scope="default"/>
+        <property name="InvoiceId" expression="get-property('GeneratedInvoiceId')" scope="default"/>
+        <property name="InvoiceIdentificationValue" value="-" scope="default"/>
+        <property name="InvoiceAmount" value="0" scope="default"/>
+        <property name="CurrencyAlphaCode" value="ETB" scope="default"/>
+        <property name="CurrencyDesignation" value="Ethiopian Birr" scope="default"/>
+        <property name="CustomerName" value="Topup Customer" scope="default"/>
+        <property name="ProviderName" value="Local Topup Service" scope="default"/>
+
+        <!-- Save into database just like success case -->
+        <dbreport>
+            <connection>
+                <pool>
+                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                </pool>
+            </connection>
+            <statement>
+                <sql>
+                    INSERT INTO public."BillGetRequests" (
+                        "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
+                        "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError",
+                        "ResProviderId", "InvoiceId", "InvoiceIdentificationValue", "InvoiceAmount",
+                        "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName"
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','),
+                        string_to_array(CAST(? AS TEXT), ',')::numeric[],
+                        string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','))
+                </sql>
+
+                <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                <parameter expression="get-property('ReqProviderId')" type="VARCHAR"/>
+                <parameter expression="get-property('UniqueCode')" type="VARCHAR"/>
+                <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+                <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                <parameter expression="get-property('status')" type="VARCHAR"/>
+                <parameter expression="get-property('responseError')" type="VARCHAR"/>
+                <parameter expression="get-property('ResProviderId')" type="VARCHAR"/>
+                <parameter expression="get-property('InvoiceId')" type="VARCHAR"/>
+                <parameter expression="get-property('InvoiceIdentificationValue')" type="VARCHAR"/>
+                <parameter expression="get-property('InvoiceAmount')" type="DECIMAL"/>
+                <parameter expression="get-property('CurrencyAlphaCode')" type="VARCHAR"/>
+                <parameter expression="get-property('CurrencyDesignation')" type="VARCHAR"/>
+                <parameter expression="get-property('CustomerName')" type="VARCHAR"/>
+                <parameter expression="get-property('ProviderName')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+
+        <!-- Respond to client -->
+        <payloadFactory media-type="json">
+            <format>
+            [   {
+        "status": "0",
+        "providerId": "999",
+        "invoiceId": "$5",
+        "customerCode": "$2",
+        "invoiceIdentificationValue": "94DY0MS8",
+        "invoiceAmount":null,
+        "currencyAlphaCode": "ETB",
+        "currencyDesignation": "ETHIOPIAN BIRR",
+        "customerName": "$2",
+        "providerName": "TopUp"
+    }]
+            </format>
+            <args>
+                <arg expression="$ctx:billerType"/>
+                <arg expression="$ctx:phoneNumber"/>
+                <arg expression="$ctx:referenceNo"/>
+                <arg expression="$ctx:accountNo"/>
+                 <arg expression="$ctx:InvoiceId"/>
+            </args>
+        </payloadFactory>
+
+        <respond/>
+    </then>
+    <else>
+
+    <log level="full">
+        <property name="NOT topup continuing getting query " expression="get-property('Payload')"/>
+    </log>
+
+    </else>
+</filter>
+
+
+
+
+    <!-- Construct the REST API request -->
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "billerType": "$1",
+                "phoneNumber": "$2"
+            }
+        </format>
+        <args>
+            <arg expression="$ctx:billerType"/>
+            <arg expression="$ctx:phoneNumber"/>
+        </args>
+    </payloadFactory>
+
+    <property name="messageType" value="application/json" scope="axis2"/>
+    <property name="ContentType" value="application/json" scope="axis2"/>
+    <property name="HTTP_METHOD" value="POST" scope="axis2"/>
+    <property name="mob_token" value="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuI6Sn1iDQMk85y8b6i7R2C9T8AenuVeOwPNvma9pK6uO1iWgUIItSFW" scope="transport"/>
+
+    <log level="full">
+        <property name="Generated REST Payload" expression="get-property('Payload')"/>
+    </log>
+
+    <!-- <call>
+        <endpoint>
+            <address uri="http://10.1.8.45:7070/api/transactions/EXT_P/query_bills" format="rest"/>
+        </endpoint>
+    </call> -->
+<call>
+    <endpoint key="queryBillsEP"/>
+</call>
+
+    <log description="Log REST Response" level="full"/>
+
+    <!-- Extract response status code -->
+    <property name="responseCode" expression="$axis2:HTTP_SC" scope="default"/>
+
+    <!-- Filter success or failure -->
+    <filter source="$axis2:HTTP_SC" regex="200">
+        <then>
+            <!-- Success case -->
+            <property name="status" value="success" scope="default"/>
+            <property name="responseError" value="false" scope="default"/>
+            
+            <!-- Process successful response -->
+            <property name="invoiceItems" expression="json-eval($)" scope="default"/>
+            
+            <log level="custom">
+                <property name="Response Items" expression="$ctx:invoiceItems"/>
+            </log>
+            
+            <!-- Insert into database -->
+            <dbreport>
+                <connection>
+                    <pool>
+                        <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    </pool>
+                </connection>
+                <statement>
+                           <sql>
+                        INSERT INTO public."BillGetRequests" (
+                            "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
+                            "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError",
+                            "ResProviderId", "InvoiceId", "InvoiceIdentificationValue", "InvoiceAmount",
+                            "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName"
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','),
+                             string_to_array(CAST(? AS TEXT), ',')::numeric[]
+, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','))
+                    </sql>
+              
+                      <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                    <parameter expression="get-property('ReqProviderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('UniqueCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('status')" type="VARCHAR"/>
+        
+                    <parameter expression="get-property('responseError')" type="VARCHAR"/>
+                                         <parameter expression="get-property('ResProviderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('InvoiceId')" type="VARCHAR"/>
+                    <parameter expression="get-property('InvoiceIdentificationValue')" type="VARCHAR"/>
+                  <parameter expression="get-property('InvoiceAmount')" type="DECIMAL"/>
+
+                    <parameter expression="get-property('CurrencyAlphaCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('CurrencyDesignation')" type="VARCHAR"/>
+                    <parameter expression="get-property('CustomerName')" type="VARCHAR"/>
+                    <parameter expression="get-property('ProviderName')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+            
+            <!-- Return the response as-is -->
+            <respond/>
+        </then>
+        <else>
+            <!-- Error case -->
+            <property name="status" value="failed" scope="default"/>
+            <property name="responseError" value="true" scope="default"/>
+            <property name="HTTP_SC" value="400" scope="axis2" type="INTEGER"/>
+            
+            <script language="js">
+                <![CDATA[
+                    var uuid = (function() {
+                        return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, function(c) {
+                            var r = Math.random() * 16 | 0,
+                                v = c === 'x' ? r : (r & 0x3 | 0x8);
+                            return v.toString(16);
+                        });
+                    })();
+                    mc.setProperty("ticketId", uuid);
+                ]]>
+            </script>
+            
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "returnCode": "ERROR",
+                        "ticketId": "$1",
+                        "traceId": "Lib023456",
+                        "feedbacks": [
+                            {
+                                "code": "BA_LI_001",
+                                "label": "Invalid bill",
+                                "severity": "ERROR",
+                                "type": "BUS",
+                                "source": "getbilllistsequence",
+                                "origin": "LIBAPP",
+                                "spanId": "998800",
+                                "parameters": [
+                                    {
+                                        "code": "$2",
+                                        "value": "Bill not found"
+                                    }
+                                ]
+                            }
+                        ]
+                    }
+                </format>
+                <args>
+                    <arg expression="$ctx:ticketId"/>
+                    <arg expression="$ctx:responseCode"/>
+                    <arg value="{substring(uuid(), 1, 8)}"/>
+                </args>
+            </payloadFactory>
+            
+            <!-- Log error to database -->
+            <dbreport>
+                <connection>
+                    <pool>
+                        <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    </pool>
+                </connection>
+                <statement>
+                              <sql>
+                        INSERT INTO public."BillGetRequests" (
+                            "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
+                            "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError",
+                            "ResProviderId", "InvoiceId", "InvoiceIdentificationValue", "InvoiceAmount",
+                            "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName"
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','),
+                             string_to_array(CAST(? AS TEXT), ',')::numeric[]
+, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','))
+                    </sql>
+
+                    
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                    <parameter expression="get-property('ReqProviderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('UniqueCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('status')" type="VARCHAR"/>
+                      <parameter expression="get-property('responseError')" type="VARCHAR"/>
+                  <parameter expression="get-property('ResProviderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('InvoiceId')" type="VARCHAR"/>
+                    <parameter expression="get-property('InvoiceIdentificationValue')" type="VARCHAR"/>
+                  <parameter expression="get-property('InvoiceAmount')" type="DECIMAL"/>
+
+                    <parameter expression="get-property('CurrencyAlphaCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('CurrencyDesignation')" type="VARCHAR"/>
+                    <parameter expression="get-property('CustomerName')" type="VARCHAR"/>
+                    <parameter expression="get-property('ProviderName')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+            
+            <dbreport>
+                <connection>
+                    <pool>
+                        <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    </pool>
+                </connection>
+                <statement>
+                    <sql>
+                        INSERT INTO public.BillError (
+                            "Id", "ReturnCode", "TicketId", "TraceId", 
+                            "Feedbacks", "RequestDate", "ErrorType"
+                        )
+                        VALUES (?, ?, ?, ?, ?, ?, ?)
+                    </sql>
+                    <parameter expression="get-property('ticketId')" type="VARCHAR"/>
+                    <parameter expression="'ERROR'" type="VARCHAR"/>
+                    <parameter expression="get-property('ticketId')" type="VARCHAR"/>
+                    <parameter expression="'Lib023456'" type="VARCHAR"/>
+                    <parameter expression="'Failed to query bills'" type="VARCHAR"/>
+                    <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                    <parameter expression="'API Error'" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+            
+            <respond/>
+        </else>
+    </filter>
+</sequence>

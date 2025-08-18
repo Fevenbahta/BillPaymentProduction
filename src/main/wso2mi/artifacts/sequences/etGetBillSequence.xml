@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="etGetBillSequence" trace="disable" xmlns="http://ws.apache.org/ns/synapse">   
+    <!-- Start Log -->
+    <!-- Extract from JSON -->
+<property name="orderId" expression="json-eval($.uniqueCode)" scope="default"/>
+<property name="shortCode" value="526341" scope="default"/>
+
+<!-- Validate orderId -->
+<filter xpath="not(get-property('orderId'))">
+    <then>
+        <property name="ERROR_MESSAGE" value="uniqueCode is required" scope="default"/>
+        <log level="custom">
+            <property name="ValidationError" value="Missing orderId"/>
+        </log>
+        <property name="HTTP_SC" value="400" scope="axis2"/>
+  <property name="ticketId" value="TICKET123" scope="default"/>
+    <property name="traceId" value="TRACE123" scope="default"/>
+    <property name="spanId" value="SPAN123" scope="default"/>
+    <property name="errorCode" value="SB_DS_001" scope="default"/>
+    <property name="errorMessage" value="Validation failed" scope="default"/>
+    <property name="source" value="validateEtBillGetPayload" scope="default"/>
+    <property name="applicationCode" value="WSO2-MI" scope="default"/>
+    <property name="parameterValue" value="Missing or invalid field(s): uniqueCode" scope="default"/>
+
+    <!-- Return JSON error response -->
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "returnCode": "ERROR",
+                "ticketId": "$ctx:ticketId",
+                "traceId": "$ctx:traceId",
+                "feedbacks": [
+                    {
+                        "code": "$ctx:errorCode",
+                        "label": "$ctx:errorMessage",
+                        "severity": "ERROR",
+                        "type": "BUS",
+                        "source": "$ctx:source",
+                        "origin": "$ctx:applicationCode",
+                        "spanId": "$ctx:spanId",
+                        "parameters": [
+                            {
+                                "code": "0",
+                                "value": "$ctx:parameterValue"
+                            }
+                        ]
+                    }
+                ]
+            }
+        </format>
+        <args>
+            <arg expression="get-property('ticketId')" />
+            <arg expression="get-property('traceId')" />
+            <arg expression="get-property('errorCode')" />
+            <arg expression="get-property('errorMessage')" />
+            <arg expression="get-property('source')" />
+            <arg expression="get-property('applicationCode')" />
+            <arg expression="get-property('spanId')" />
+            <arg expression="get-property('parameterValue')" />
+        </args>
+    </payloadFactory>
+
+    <property name="messageType" value="application/json" scope="axis2"/>
+ 
+    <drop/>
+        <respond/>
+    </then>
+</filter>
+
+<!-- Validate shortCode -->
+
+
+
+    <log level="full">
+        <property name="Step" value="Start etgetbillSequence"/>
+        <property name="orderId" expression="get-property('orderId')"/>
+        <property name="shortCode" expression="get-property('shortCode')"/>
+    </log>
+
+
+
+
+<property name="uri.var.orderId" expression="get-property('orderId')" scope="default"/>
+
+    <property name="uri.var.shortCode" expression="get-property('shortCode')"/>
+
+
+<!-- Step 2: Use it in the address URI -->
+<log  level="full"/>
+<property name="Accept" value="application/json" scope="transport"/>
+<property name="messageType" value="application/json" scope="axis2"/>
+<property name="Content-Type" value="application/json" scope="transport"/>
+
+<property name="uri.var.orderId" expression="get-property('orderId')" scope="default"/>
+<property name="uri.var.shortCode" expression="get-property('shortCode')" scope="default"/>
+
+
+    <!-- Call the external API -->
+<!-- Set the string with literal & -->
+<script language="js"><![CDATA[
+   mc.setProperty("authString", "lionbanktest@ethiopianairlines.com:LI*&%@54778Ba");
+]]></script>
+
+<header name="Authorization" expression="fn:concat('Basic ', base64Encode(get-property('authString')))" scope="transport"/>
+
+<!-- <call>
+    <endpoint>
+        <http method="GET"
+              uri-template="http://flygateapitestvpn.azurewebsites.net/Lion/api/V1.0/Lion/GetOrder?orderId={uri.var.orderId}&amp;shortCode={uri.var.shortCode}">
+            <timeout>
+                <duration>60000</duration> 
+                <responseAction>fault</responseAction>
+            </timeout>
+        </http>
+    </endpoint>
+</call> -->
+
+
+<call>
+    <endpoint key="airlinesGetOrderEP"/>
+</call>
+
+
+
+
+    <property name="amount" expression="json-eval($.amount)" scope="default"/>
+<property name="traceNumber" expression="json-eval($.traceNumber)" scope="default"/>
+<property name="statusCodeResponse" expression="json-eval($.statusCodeResponse)" scope="default"/>
+<property name="statusCodeResponseDescription" expression="json-eval($.statusCodeResponseDescription)" scope="default"/>
+<property name="expireDate" expression="json-eval($.expireDate)" scope="default"/>
+<property name="customerName" expression="json-eval($.customerName)" scope="default"/>
+<property name="merchantId" expression="json-eval($.merchantId)" scope="default"/>
+<property name="merchantCode" expression="json-eval($.merchantCode)" scope="default"/>
+<property name="merchantName" expression="json-eval($.merchantName)" scope="default"/>
+<property name="messageList" expression="json-eval($.messageList)" scope="default"/>
+<property name="referenceId" expression="json-eval($.referenceId)" scope="default"/>
+<property name="status" expression="json-eval($.status)" scope="default"/>
+<property name="businessErrorCode" expression="json-eval($.businessErrorCode)" scope="default"/>
+<property name="statusCode" expression="json-eval($.statusCode)" scope="default"/>
+<property name="lionTransactionNo" expression="json-eval($.lionTransactionNo)" scope="default"/>
+<property name="Errors" expression="json-eval($.Errors)" scope="default"/>
+<property name="utilityName" expression="json-eval($.utilityName)" scope="default"/>
+<property name="billerType" expression="json-eval($.billerType)" scope="default"/>
+<property name="phoneNumber" expression="json-eval($.phoneNumber)" scope="default"/>
+<property name="accountNo" expression="json-eval($.accountNo)" scope="default"/>
+
+
+    <!-- Log Response -->
+    <log level="full">
+        <property name="Step" value="Received Response"/>
+        <property name="HTTP Status" expression="get-property('HTTP_SC')"/>
+        <property name="ResponsePayload" expression="json-eval($.)"/>
+    </log>
+
+    <filter source="get-property('HTTP_SC')" regex="200">
+        <then>
+            <log level="custom">
+                <property name="getStatus" value="Success"/>
+            </log>
+
+        </then>
+        <else>
+            <log level="custom">
+                <property name="getStatus" value="Failed"/>
+                <property name="HTTP Status" expression="get-property('HTTP_SC')"/>
+            </log>
+            <property name="error" value="getbill infor from airlines  failed. HTTP status not 200" scope="default"/>
+   
+        </else>
+    </filter>
+<script language="js"><![CDATA[
+    var expireDateStr = mc.getProperty('expireDate'); // e.g. "Jun 06, 2025 22:32"
+    if (expireDateStr != null && expireDateStr.trim() !== "") {
+        var months = {
+            "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05", "Jun": "06",
+            "Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"
+        };
+
+        var parts = expireDateStr.split(" ");
+        if (parts.length === 4) {
+            var monthNum = months[parts[0]];
+            var day = parts[1].replace(",", "");
+            var year = parts[2];
+            var time = parts[3];
+
+            if (monthNum && day && year && time) {
+                var formattedDate = year + "-" + monthNum + "-" + (day.length == 1 ? "0" + day : day) + " " + time + ":00";
+                mc.setProperty('expireDateFormatted', formattedDate);
+            } else {
+                // If parts missing or invalid, set null or empty
+                mc.setProperty('expireDateFormatted', null);
+            }
+        } else {
+            mc.setProperty('expireDateFormatted', null);
+        }
+    } else {
+        // expireDate is null or empty string
+        mc.setProperty('expireDateFormatted', null);
+    }
+]]></script>
+
+<script language="js">
+    var currentDate = new Date();
+    var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0]; // Formats as yyyy-MM-dd HH:mm:ss
+    mc.setProperty('currentDate', formattedDate);
+</script>
+<dbreport>
+  <connection>
+    <pool>
+      <dsName>jdbc/DbsBillPaymentDB</dsName>
+    </pool>
+  </connection>
+  <statement>
+    <sql>
+      INSERT INTO public."airlinesorder" (
+         "OrderId", "ShortCode", "Amount", "TraceNumber", 
+        "StatusCodeResponse", "StatusCodeResponseDescription",
+        "ExpireDate", "CustomerName", "MerchantId", "MerchantCode",
+        "MerchantName", "Message", "Status", "RequestDate", "ReferenceId",
+        "BusinessErrorCode", "StatusCode", "MessageList", "LionTransactionNo",
+        "Errors", "UtilityName", "BillerType", "PhoneNumber", "AccountNo"
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+    </sql>
+    
+
+
+    <parameter expression="get-property('orderId')" type="VARCHAR"/>
+    <parameter expression="get-property('shortCode')" type="VARCHAR"/>
+<parameter expression="get-property('amount')" type="DECIMAL"/>
+    <parameter expression="get-property('traceNumber')" type="VARCHAR"/>
+    <parameter expression="get-property('statusCodeResponse')" type="NUMERIC"/>
+    <parameter expression="get-property('statusCodeResponseDescription')" type="VARCHAR"/>
+<parameter expression="get-property('expireDateFormatted')" type="TIMESTAMP"/>
+    <parameter expression="get-property('customerName')" type="VARCHAR"/>
+    <parameter expression="get-property('merchantId')" type="BIGINT"/>
+    <parameter expression="get-property('merchantCode')" type="VARCHAR"/>
+    <parameter expression="get-property('merchantName')" type="VARCHAR"/>
+    <parameter expression="get-property('message')" type="VARCHAR"/>
+    <parameter expression="get-property('status')" type="NUMERIC"/>
+    
+      <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+
+    <parameter expression="get-property('referenceId')" type="VARCHAR"/>
+    <parameter expression="get-property('businessErrorCode')" type="VARCHAR"/>
+    <parameter expression="get-property('statusCode')" type="NUMERIC"/>
+    <parameter expression="get-property('messageList')" type="VARCHAR"/>
+    <parameter expression="get-property('lionTransactionNo')" type="VARCHAR"/>
+    <parameter expression="get-property('errors')" type="VARCHAR"/>
+    <parameter expression="get-property('utilityName')" type="VARCHAR"/>
+    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+    <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+  </statement>
+</dbreport>
+<script language="js"><![CDATA[
+    var response = mc.getPayloadJSON(); // no need to parse
+
+    if ( response.statusCodeResponse == 1) {
+     mc.setProperty("response_status", "success");
+        var success = [
+            {
+                "status": "0",
+                "providerId": "526341",
+                "invoiceId": response.traceNumber,
+                "invoiceIdentificationValue": "INVD" + response.traceNumber,
+                "invoiceAmount": response.amount.toFixed(4),
+                "currencyAlphaCode": "ETB",
+                "currencyDesignation": "ETHIOPIAN BIRR",
+                "customerName": response.customerName,
+                "providerName": response.utilityName
+            }
+        ];
+        mc.setPayloadJSON(success);
+          mc.setProperty("HTTP_SC", 200); // 
+    } else {
+     mc.setProperty("response_status", "error");
+        var error = {
+            "returnCode": "ERROR",
+            "ticketId": "247f4b-5d7b-4d32-a1db-f893edaa38a7",
+            "traceId": "92e9013d25cca084",
+            "feedbacks": [
+                {
+                    "code": "SB_DS_001",
+                    "label": "Validation failed",
+                    "severity": "ERROR",
+                    "type": "BUS",
+                    "source": "validateBillGetPayload",
+                    "origin": "WSO2-MI",
+                    "spanId": "92e9013d",
+                    "parameters": [
+                        {
+                            "code": "0",
+                            "value":  response.statusCodeResponseDescription
+                        }
+                    ]
+                }
+            ]
+        };
+        mc.setPayloadJSON(error);
+    }
+]]></script>
+
+  <filter source="get-property('response_status')" regex="success">
+            <then>
+                <property name="HTTP_SC" value="200" scope="axis2"/>
+            </then>
+            <else>
+                <property name="HTTP_SC" value="400" scope="axis2"/>
+            </else>
+        </filter>
+        <respond/>
+ 
+</sequence>

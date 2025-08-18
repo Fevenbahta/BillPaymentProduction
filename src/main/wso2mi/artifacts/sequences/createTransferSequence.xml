@@ -1,0 +1,175 @@
+<sequence name="createTransferSequence" xmlns="http://ws.apache.org/ns/synapse">
+    <payloadFactory media-type="xml">
+        <format>
+            <soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/"
+                              xmlns:amp="http://soprabanking.com/amplitude">
+                
+                <soapenv:Body>
+                    <amp:createTransferRequestFlow>
+                        <amp:requestHeader>
+                            <amp:requestId>$1</amp:requestId>
+                            <amp:serviceName>createTransfer</amp:serviceName>
+                            <amp:timestamp>$2</amp:timestamp>
+                            <amp:originalName>TRASAPI</amp:originalName>
+                            <amp:userCode>LIBTRANAPP</amp:userCode>
+                        </amp:requestHeader>
+                        <amp:createTransferRequest>
+                            <amp:canal>TRANSPORT_CHANNEL</amp:canal>
+                            <amp:pain001><![CDATA[
+                                <!-- pain.001.001.03DB content with $3 to $11 -->
+                                <Document xmlns:xsi='http://www.w3.org/2001/XMLSchema-instance' xmlns='urn:iso:std:iso:20022:tech:xsd:pain.001.001.03DB'>
+                                    <CstmrCdtTrfInitn>
+                                        <GrpHdr>
+                                            <MsgId>$3</MsgId>
+                                            <CreDtTm>$2</CreDtTm>
+                                            <NbOfTxs>1</NbOfTxs>
+                                            <CtrlSum>$11</CtrlSum>
+                                            <InitgPty/>
+                                            <DltPrvtData>
+                                                <FlwInd>PROD</FlwInd>
+                                                <DltPrvtDataDtl>
+                                                    <PrvtDtInf>TRANSPORT_CHANNEL</PrvtDtInf>
+                                                    <Tp>
+                                                        <CdOrPrtry>
+                                                            <Cd>CHANNEL</Cd>
+                                                        </CdOrPrtry>
+                                                    </Tp>
+                                                </DltPrvtDataDtl>
+                                            </DltPrvtData>
+                                        </GrpHdr>
+                                        <PmtInf>
+                                            <PmtInfId>$4</PmtInfId>
+                                            <PmtMtd>TRF</PmtMtd>
+                                            <BtchBookg>0</BtchBookg>
+                                            <NbOfTxs>1</NbOfTxs>
+                                            <CtrlSum>$11</CtrlSum>
+                                            <DltPrvtData>
+                                                <OrdrPrties>
+                                                    <Tp>IMM</Tp>
+                                                    <Md>CREATE</Md>
+                                                </OrdrPrties>
+                                            </DltPrvtData>
+                                            <PmtTpInf>
+                                                <InstrPrty>NORM</InstrPrty>
+                                                <SvcLvl>
+                                                    <Prtry>INTERNAL</Prtry>
+                                                </SvcLvl>
+                                            </PmtTpInf>
+                                            <ReqdExctnDt>1901-01-01</ReqdExctnDt>
+                                            <Dbtr/>
+                                            <DbtrAcct>
+                                                <Id>
+                                                    <Othr>
+                                                        <Id>$7</Id>
+                                                        <SchmeNm>
+                                                            <Prtry>BKCOM_ACCOUNT</Prtry>
+                                                        </SchmeNm>
+                                                    </Othr>
+                                                </Id>
+                                                <Ccy>ETB</Ccy>
+                                            </DbtrAcct>
+                                            <DbtrAgt>
+                                                <FinInstnId>
+                                                    <Nm>BANQUE</Nm>
+                                                    <Othr>
+                                                        <Id>00011</Id>
+                                                        <SchmeNm>
+                                                            <Prtry>ITF_DELTAMOP_IDETAB</Prtry>
+                                                        </SchmeNm>
+                                                    </Othr>
+                                                </FinInstnId>
+                                                <BrnchId>
+                                                    <Id>$8</Id>
+                                                    <Nm>Agence</Nm>
+                                                </BrnchId>
+                                            </DbtrAgt>
+                                            <CdtTrfTxInf>
+                                                <PmtId>
+                                                    <InstrId>$5</InstrId>
+                                                    <EndToEndId>$6</EndToEndId>
+                                                </PmtId>
+                                                <Amt>
+                                                    <InstdAmt Ccy='ETB'>$11</InstdAmt>
+                                                </Amt>
+                                                <CdtrAgt>
+                                                    <FinInstnId>
+                                                        <Nm>BANQUE</Nm>
+                                                        <Othr>
+                                                            <Id>00011</Id>
+                                                            <SchmeNm>
+                                                                <Prtry>ITF_DELTAMOP_IDETAB</Prtry>
+                                                            </SchmeNm>
+                                                        </Othr>
+                                                    </FinInstnId>
+                                                    <BrnchId>
+                                                        <Id>$10</Id>
+                                                        <Nm>Agence</Nm>
+                                                    </BrnchId>
+                                                </CdtrAgt>
+                                                <Cdtr/>
+                                                <CdtrAcct>
+                                                    <Id>
+                                                        <Othr>
+                                                            <Id>$9</Id>
+                                                            <SchmeNm>
+                                                                <Prtry>BKCOM_ACCOUNT</Prtry>
+                                                            </SchmeNm>
+                                                        </Othr>
+                                                    </Id>
+                                                    <Ccy>ETB</Ccy>
+                                                </CdtrAcct>
+                                                <RmtInf>
+                                                    <Ustrd>$1</Ustrd>
+                                                </RmtInf>
+                                            </CdtTrfTxInf>
+                                        </PmtInf>
+                                    </CstmrCdtTrfInitn>
+                                </Document>
+                            ]]></amp:pain001>
+                        </amp:createTransferRequest>
+                    </amp:createTransferRequestFlow>
+                </soapenv:Body>
+            </soapenv:Envelope>
+        </format>
+        <args>
+            <arg expression="get-property('dbsReferenceNo')"/>
+            <arg expression="get-property('timestamp')"/>
+            <arg expression="get-property('msgId')"/>
+            <arg expression="get-property('pmtInfId')"/>
+            <arg expression="get-property('instrId')"/>
+            <arg expression="get-property('endToEndId')"/>
+            <arg expression="get-property('debtorAccountId')"/>
+            <arg expression="get-property('debtorBranchId')"/>
+            <arg expression="get-property('creditorAccountId')"/>
+            <arg expression="get-property('creditorBranchId')"/>
+            <arg expression="get-property('paymentAmountNoDecimal')"/>
+        </args>
+    </payloadFactory>
+    
+    <log level="full"/>
+     <log level="full">
+          <property name="calling " value="create transfer for airlines " scope="transport"/>
+
+     </log>
+
+<property name="DISABLE_ADDRESSING_FOR_OUT_MESSAGES" value="true" scope="axis2"/>
+<property name="REST_URL_POSTFIX" action="remove" scope="axis2" type="STRING"/>
+ <header name="To" action="remove" scope="transport"/>
+    <header name="ReplyTo" action="remove" scope="transport"/>
+    <header name="MessageID" action="remove" scope="transport"/>
+ <property name="messageType" scope="axis2" type="STRING" value="text/xml"/>
+ 
+    <property name="messageType" scope="axis2" type="STRING" value="text/xml"/>
+<header name="SOAPAction" scope="transport" action="set" value='"createTransfer"'/>
+      
+    <!-- <call>
+        <endpoint>
+            <address format="soap11" uri="https://10.1.7.85:8095/createTransfer"/>
+        </endpoint>
+    </call> -->
+<call>
+    <endpoint key="createTransferBillEP"/>
+</call>
+
+    <log category="INFO" level="full"/>
+</sequence>

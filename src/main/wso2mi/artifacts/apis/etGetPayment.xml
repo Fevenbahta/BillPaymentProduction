@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+    <api context="/etgetpayment" name="etGetPayment" xmlns="http://ws.apache.org/ns/synapse">
+        <resource methods="POST" uri-template="/">
+            <inSequence>
+                    <sequence key="etGetBillSequence"/>
+
+            </inSequence>
+            <faultSequence>
+            </faultSequence>
+        </resource>
+    </api>

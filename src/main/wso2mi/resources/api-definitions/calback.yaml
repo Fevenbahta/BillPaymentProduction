@@ -1,13 +1,19 @@
 openapi: 3.0.1
 info:
-  title: ecPayment
-  description: API Definition of ecPayment
+  title: billcallback
+  description: API Definition of billcallback
   version: 1.0.0
 servers:
-- url: http://localhost:8290/ecPayment
+- url: http://localhost:8290/billcallback
 paths:
-  /:
-    post:
+  /{referenceNo}:
+    patch:
+      parameters:
+      - name: referenceNo
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         description: Sample Payload
         content:

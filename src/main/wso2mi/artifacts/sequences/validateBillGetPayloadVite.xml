@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<sequence xmlns="http://ws.apache.org/ns/synapse" name="validateBillGetPayload">
-    <log level="full"/>
+<sequence name="validateBillGetPayloadVite" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+  <log level="full"/>
     <script language="js">
         var payload = mc.getPayloadJSON();
         var providerId = payload.providerId;
@@ -20,8 +20,8 @@
         var missingFields = [];
         
         // Check if either providerId and uniqueCode are present, or phoneNumber is present
-        if (!phoneNumber &amp;&amp;  (!providerId || !uniqueCode)) {
-            missingFields.push("Either providerId and uniqueCode or phoneNumber must be provided.");
+        if (!phoneNumber &amp;&amp;  ( !uniqueCode)) {
+            missingFields.push("Either uniqueCode or phoneNumber must be provided.");
         }
 
         // Check for other required fields
@@ -69,7 +69,7 @@
             mc.setProperty("terminateFlow", "true");  // Flag to stop further processing
         } else {
             // If validation passes, determine the sequence to route to
-            if (providerId &amp;&amp;  uniqueCode) {
+            if (uniqueCode) {
                 mc.setProperty("sequenceToInvoke", "getbilldetailsequence");
             } else if (phoneNumber) {
                 mc.setProperty("sequenceToInvoke", "getbilllistsequence");
@@ -99,18 +99,18 @@
             <case regex="getbilldetailsequence">
                 <!-- Log when invoking getbilldetailsequence -->
                 <log level="custom">
-                    <property name="Info" value="Invoking getbilldetailsequence."/>
+                    <property name="Info" value="Invoking getbilldetailVitesequence."/>
                 </log>
                 <!-- Invoke the getbilldetailsequence if validation passed -->
-                <sequence key="getbilldetailsequence"/>
+                <sequence key="getBillDetailVite"/>
             </case>
             <case regex="getbilllistsequence">
                 <!-- Log when invoking getbilllistsequence -->
                 <log level="custom">
-                    <property name="Info" value="Invoking getbilllistsequence."/>
+                    <property name="Info" value="Invoking getbilllistsequenceVite."/>
                 </log>
                 <!-- Invoke the getbilllistsequence if validation passed -->
-                <sequence key="getbilllistsequence"/>
+                <sequence key="getbilllistsequenceVite"/>
             </case>
             <default>
                 <!-- Log when no valid sequence is found -->

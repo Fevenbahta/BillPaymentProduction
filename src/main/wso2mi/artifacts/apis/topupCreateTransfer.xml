@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/topupcreatetransfer" name="topupCreateTransfer" xmlns="http://ws.apache.org/ns/synapse">
+       <resource methods="POST">
+    <inSequence>
+    
+      <!-- Extract body (payload) as a string and convert to JSON context -->
+      <property name="jsonPayload" expression="json-eval($)" scope="default"/>
+
+      <!-- Optionally log input -->
+      <log level="custom">
+        <property name="message" value="Incoming POT request to /topupcreatetransfer/"/>
+            <property name="payload" expression="get-property('jsonPayload')"/>
+      </log>
+
+      <!-- Call your business logic sequence -->
+      <sequence key="createTransferForTopUp"/>
+    </inSequence>
+
+    <outSequence>
+      <send/>
+    </outSequence>
+
+    <faultSequence>
+      <log level="full"/>
+      <send/>
+    </faultSequence>
+  </resource>
+</api>
+

@@ -1,0 +1,650 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="excuteEtPaymentSeq" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <log level="custom">
+        <property name="Action" value=">> Entering excuteEtPaymentSeq sequence"/>
+        <property name="dbsUserId" value="from USSD" scope="default"/>
+    </log>
+       <property name="dbsUserId" value="from USSD" scope="default"/>
+  <property name="DAccountNo" expression="get-property('DAccountNo')" scope="default"/>
+
+<sequence key="etValidationUSSDSeq"/>
+
+
+<property name="MsgId" value=""/>
+<property name="PmtInfId" value=""/>
+<property name="InstrId" value=""/>
+<property name="EndToEndId" value=""/>
+<property name="Amount" expression="json-eval($.paymentAmount)"/>
+<property name="DAccountNo" expression="json-eval($.accountNo)"/>
+<property name="CAccountNo" value="1100223344"/>
+<property name="CAccountName" value="Airlines Gl"/>
+<property name="ResponseStatus" value="Pending"/>
+<property name="ErrorReason" value=""/>
+<property name="IsSuccessful" value="false"/>
+<property name="OrderId" expression="json-eval($.customerCode)"/>
+<property name="MerchantCode" value="526341"/>
+<property name="DbsUserId" expression="json-eval($.dbsUserId)"/>
+<!-- Hardcoded values -->
+<property name="updatedBy" value="Customer"/>
+<property name="approvedBy" value="Customer"/>
+<property name="requestedBy" value="USSD"/>
+<property name="DAccountBranch" expression="json-eval($.branch)"/>
+<property name="TraceNumber" expression="json-eval($.invoiceId)"/>
+
+<log level="full"/>
+        <script language="js"><![CDATA[
+    // Get the 'paymentAmount' property from the message context
+    var paymentAmount = mc.getProperty('Amount');
+    
+    // Remove decimal part (e.g., "20.00" -> "20")
+    if(paymentAmount != null) {
+        var intAmount = paymentAmount.toString().split('.')[0];
+        mc.setProperty('paymentAmount', intAmount);
+    }
+]]></script>
+
+   <sequence key="getBillAccountInfo"/>
+<sequence key="validatePNRSequence"/>
+<script language="js">
+    var currentDate = new Date();
+    var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0]; // Formats as yyyy-MM-dd HH:mm:ss
+    mc.setProperty('currentDate', formattedDate);
+</script>
+<script language="js">
+    var currentDate = new Date();
+    var isoString = currentDate.toISOString().replace('Z', ''); // e.g. "2024-03-26T08:10:18.478"
+    
+    // Generate random 9-digit nano (without padding)
+    var nano = Math.floor(Math.random() * 1e9).toString();
+    
+    // Replace milliseconds with nano
+    var formattedDate = isoString.split('.')[0] + '.' + nano;
+    
+    mc.setProperty('currentDateSecond', formattedDate);
+</script>
+
+
+<script language="js"><![CDATA[
+    var uuid = java.util.UUID.randomUUID().toString();
+    var prefixedUuid = uuid;
+    mc.setProperty("referenceNo", prefixedUuid);
+]]></script>
+
+<log level="custom"><property name="Generated ReferenceNo" expression="get-property('referenceNo')"/></log>
+
+<property name="ReferenceNo" expression="get-property('referenceNo')"/>
+
+<property name="dbsReferenceNo" expression="get-property('referenceNo')"/>
+<property name="RequestId" expression="get-property('referenceNo')"/>
+
+   <filter xpath="get-property('ERROR_CODE')">
+        <then>
+            <payloadFactory media-type="json">
+                <format>
+                    {"status":"ERROR","message":"$1"}
+                </format>
+                <args>
+                    <arg expression="get-property('ERROR_MESSAGE')"/>
+                </args>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </then>
+        <else>
+            <!-- Save the request in DB -->
+            <dbreport>
+                <connection>
+                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                </connection>
+                <statement>
+                    <sql>
+                        INSERT INTO public."airlinestransfer" (
+                             "RequestId", "MsgId", "PmtInfId", "InstrId", "EndToEndId", 
+                            "Amount", "DAccountNo", "CAccountNo", "DAccountBranch", "CAccountName", 
+                            "TransferDate", "ResponseStatus", "ErrorReason", "IsSuccessful", "OrderId", "ReferenceNo", "TraceNumber",
+                "MerchantCode", "DbsUserId", "updatedBy", "approvedBy", "requestedBy", 
+                "DAccountName"
+            )
+            VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        </sql>
+
+
+        <parameter expression="get-property('RequestId')" type="VARCHAR"/>
+        <parameter expression="get-property('MsgId')" type="VARCHAR"/>
+        <parameter expression="get-property('PmtInfId')" type="VARCHAR"/>
+        <parameter expression="get-property('InstrId')" type="VARCHAR"/>
+        <parameter expression="get-property('EndToEndId')" type="VARCHAR"/>
+        <parameter expression="get-property('Amount')" type="DECIMAL"/>
+        <parameter expression="get-property('DAccountNo')" type="VARCHAR"/>
+        <parameter expression="get-property('CAccountNo')" type="VARCHAR"/>
+        <parameter expression="get-property('branch')" type="VARCHAR"/>
+        <parameter expression="get-property('CAccountName')" type="VARCHAR"/>
+  <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+        <parameter expression="get-property('ResponseStatus')" type="VARCHAR"/>
+        <parameter expression="get-property('ErrorReason')" type="VARCHAR"/>
+      
+        <parameter expression="get-property('IsSuccessful')" type="BIT"/>
+        <parameter expression="get-property('OrderId')" type="VARCHAR"/>
+        <parameter expression="get-property('ReferenceNo')" type="VARCHAR"/>
+        <parameter expression="get-property('TraceNumber')" type="VARCHAR"/>
+        <parameter expression="get-property('MerchantCode')" type="VARCHAR"/>
+        <parameter expression="get-property('DbsUserId')" type="VARCHAR"/>
+        <parameter expression="get-property('updatedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('approvedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('requestedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('accountHolderName')" type="VARCHAR"/>
+    </statement>
+</dbreport>
+<log  level="full"/>
+
+
+
+
+
+
+
+
+        </else>
+    </filter>
+    <log level="custom">
+        <property name="OrderId" expression="get-property('OrderId')"/>
+        <property name="ReferenceNo" expression="get-property('ReferenceNo')"/>
+        <property name="Branch" expression="get-property('DAccountBranch')"/>
+        <property name="DAccountNo" expression="get-property('DAccountNo')"/>
+           <property name="Amount" expression="get-property('Amount')"/>
+          </log>
+
+    <!-- Check if invoiceId exists -->
+    <filter xpath="boolean(get-property('Amount'))">
+        <then>
+<log level="simple">
+         <property name="billerType" expression="get-property('billerType')"/>
+              <property name="billerType" value="ET  innn "/>
+</log>
+        
+   <property name="uuid" expression="fn:concat('REQ-', uuid:true())" scope="default"/>
+        <property name="timestamp" expression="get-property('currentDateSecond')" scope="default"/>
+<script language="js"><![CDATA[
+    var now = java.time.LocalDateTime.now();
+    var formatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    var timestampPart = now.format(formatter);
+    
+    function randomAlphaNumeric(length) {
+        var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        var sb = new java.lang.StringBuilder();
+        for (var i = 0; i < length; i++) {
+            var index = Math.floor(Math.random() * chars.length);
+            sb.append(chars.charAt(index));
+        }
+        return sb.toString();
+    }
+
+    var requestId = timestampPart + Math.floor(Math.random() * 900 + 100); // e.g. 2024060911351099912
+    var msgId = randomAlphaNumeric(20).toUpperCase();                     // e.g. 31OHEOE87IJ84RRFTFD
+    var pmtInfId = randomAlphaNumeric(18).toUpperCase();                 // e.g. FAHTYY9RLJXCR6B4FD
+    var instrId = randomAlphaNumeric(32);                                // e.g. 01PDTE4r085ET1EY6ALS003QFWND0I
+    var endToEndId = randomAlphaNumeric(32);                             // e.g. F5O5PrR5RITRRY67ZS4Q0QFIUHD7S
+    var ustrd = randomAlphaNumeric(28).toUpperCase();                    // e.g. 35587E48PrUXTR1B2AD
+
+    mc.setProperty("requestId", requestId);
+    mc.setProperty("msgId", msgId);
+    mc.setProperty("pmtInfId", pmtInfId);
+    mc.setProperty("instrId", instrId);
+    mc.setProperty("endToEndId", endToEndId);
+    mc.setProperty("ustrd", ustrd);
+]]></script>
+
+        <!-- Use dynamic debtor branch, account and payment amount -->
+        <script language="js"><![CDATA[
+    // Get the 'paymentAmount' property from the message context
+    var paymentAmount = mc.getProperty('Amount');
+    
+    // Remove decimal part (e.g., "20.00" -> "20")
+    if(paymentAmount != null) {
+        var intAmount = paymentAmount.toString().split('.')[0];
+        mc.setProperty('paymentAmountNoDecimal', intAmount);
+    }
+]]></script>
+          
+      <property name="debtorAccountId" expression="get-property('DAccountNo')"/>
+    <property name="debtorBranchId" expression="get-property('DAccountBranch')"/>
+    <property name="creditorAccountId" expression="get-property('creditorAccountId')"/>
+    <property name="creditorBranchId" expression="get-property('creditorBranchId')"/>
+    <property name="paymentAmountNoDecimal" expression="get-property('paymentAmountNoDecimal')"/>
+  <property name="dbsReferenceNo" expression="get-property('ReferenceNo')"/>
+
+        <!-- For creditor, you can also set dynamically or hardcode for now -->
+        <property name="creditorAccountId" value="00110611283" scope="default"/>
+        <property name="creditorBranchId" value="00129" scope="default"/>
+
+    <property name="id" expression="get-property('ReferenceNo')"/>
+<log level="custom">
+    <property name="id" expression="get-property('ReferenceNo')"/>
+     <property name="dbsReferenceNo" expression="get-property('ReferenceNo')"/>
+    <property name="timestamp" expression="get-property('timestamp')"/>
+    <property name="msgId" expression="get-property('msgId')"/>
+    <property name="pmtInfId" expression="get-property('pmtInfId')"/>
+    <property name="instrId" expression="get-property('instrId')"/>
+    <property name="endToEndId" expression="get-property('endToEndId')"/>
+    <property name="debtorAccountId" expression="get-property('DAccountNo')"/>
+    <property name="debtorBranchId" expression="get-property('DAccountBranch')"/>
+    <property name="creditorAccountId" expression="get-property('creditorAccountId')"/>
+    <property name="creditorBranchId" expression="get-property('creditorBranchId')"/>
+    <property name="paymentAmountNoDecimal" expression="get-property('paymentAmountNoDecimal')"/>
+</log>
+  <sequence key="createTransferSequence"/>
+ 
+    <log category="INFO" level="full"/>
+
+ <property name="pain002Xml" expression="fn:normalize-space(//fjs1:pain002/text())" scope="default" xmlns:fjs1="http://soprabanking.com/amplitude"/>
+    
+<script language="js"><![CDATA[
+    var raw = mc.getProperty('pain002Xml');
+    var xml = String(raw); // Ensure it's treated as a JavaScript string
+
+    if (xml.indexOf('<TxSts>ACSP</TxSts>') > -1 || xml.indexOf('<DtldSts>ACSP</DtldSts>') > -1) {
+        mc.setProperty('Status', 'SUCCESS');
+    } else {
+        mc.setProperty('Status', 'FAILURE');
+    }
+]]></script>
+
+<log level="custom">
+    <property name="Status" expression="get-property('Status')"/>
+</log>
+
+
+<log level="custom">
+    <property name="ExtractedPain002" expression="get-property('Status')"/>
+</log>
+
+   
+
+
+<filter xpath="get-property('Status') = 'SUCCESS'">   
+    <then>
+     <log level="full">
+    <property name="transfer create  sucess going to confirm" value="going to confirm airlines"/>
+</log>
+        <log level="full"/>
+
+        <dbreport>
+            <connection>
+                <pool>
+                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                </pool>
+            </connection>
+            <statement>
+                <sql>
+                    UPDATE public."airlinestransfer"
+                    SET "ResponseStatus" = ?,
+                       "Issucessful" = true,
+                        "MsgId" = ?,
+                        "PmtInfId" = ?,
+                        "InstrId" = ?,
+                        "EndToEndId" = ?
+                    WHERE "RequestId" = ?
+                </sql>
+                  <parameter expression="get-property('pain002Xml')" type="VARCHAR"/>
+            
+                <parameter expression="get-property('msgId')" type="VARCHAR"/>
+                <parameter expression="get-property('pmtInfId')" type="VARCHAR"/>
+                <parameter expression="get-property('instrId')" type="VARCHAR"/>
+                <parameter expression="get-property('endToEndId')" type="VARCHAR"/>
+                <parameter expression="get-property('id')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+
+
+
+
+
+
+                           <payloadFactory media-type="json">
+            <format>
+                {
+                    "accountDebited": "$1",
+                    "accountCredited": "Ethiopian Airlines",
+                    "amount": "$3",
+                    "transactionId": "$4",
+                    "Fullname": "$5",
+                    "paymentType": "ET"
+                }
+            </format>
+            <args>
+                <arg expression="get-property('debtorAccountId')" />
+                <arg expression="get-property('shortCode')" />
+                <arg expression="get-property('paymentAmountNoDecimal')" />
+                <arg expression="get-property('dbsReferenceNo')" />
+                <arg expression="get-property('accountHolderName')" />
+                <arg expression="get-property('billerType')" />
+            </args>
+        </payloadFactory>
+<log level="full"/>
+        <!-- Set content-type header -->
+        <property name="Content-Type" value="application/json" scope="transport"/>
+
+        <!-- Call external receipt API -->
+        <!-- <call>
+            <endpoint>
+                <http uri-template="http://10.1.22.198:3060/generate-receipt" method="POST"/>
+            </endpoint>
+        </call> -->
+                         <call>
+    <endpoint key="generateBillReceiptEP"/>
+</call>
+
+<log level="full"/>
+        <!-- Optional: log response from receipt API -->
+        <log level="full">
+            <property name="AfterReceiptCall" expression="json-eval($.message)" />
+        </log>
+
+        <!-- Store receipt status -->
+        <property name="receiptStatus" expression="json-eval($.message)" scope="default" type="STRING" />
+
+                            <dbreport>
+                                <connection>
+                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                </connection>
+                                <statement>
+                                    <sql>
+                                       UPDATE public."airlinestransfer"
+SET 
+"ReceiptStatus" = ?
+WHERE "Id" = (
+  SELECT "Id"
+  FROM public."airlinestransfer"
+  WHERE "ReferenceNo" = ?
+  ORDER BY "Id" DESC
+  LIMIT 1
+)
+                                    </sql> 
+                                      <parameter expression="get-property('receiptStatus')" type="CHAR"/>
+                                    <parameter expression="get-property('ReferenceNo')" type="VARCHAR"/>
+                            
+                                </statement>
+                            </dbreport>
+
+
+
+
+
+          <script language="js"><![CDATA[
+    mc.setProperty("authString","LionProd@ethiopianairlines.com:Lion@28#2&FJD*Q!03390");
+  ]]></script>
+
+  <header name="Authorization" expression="fn:concat('Basic ', base64Encode(get-property('authString')))" scope="transport"/>
+
+
+<payloadFactory media-type="json">
+    <format>
+        {
+          "orderId": "$1",
+          "amount": $2,
+          "currency": "$3",
+          "status": "$4",
+          "remark": "$5",
+          "shortCode": "$6",
+          "traceNumber": "$7",
+          "ReferenceNumber": "$8",
+          "PayerCustomerName": "$9",
+          "PaidAccountNumber": "$10"
+        }
+    </format>
+    <args>
+        <arg expression="get-property('OrderId')"/>
+        <arg expression="get-property('Amount')"/>
+        <arg value="ETB"/>
+        <arg value="1"/>
+        <arg value="Successfully Paid"/>
+        <arg value="526341"/>
+        <arg expression="get-property('TraceNumber')"/>
+        <arg expression="get-property('dbsReferenceNo')"/>
+        <arg expression="get-property('accountHolderName')"/>
+        <arg expression="get-property('debtorAccountId')"/>
+    </args>
+</payloadFactory>
+
+
+<log level="full">
+    <property name="ConfirmOrder Payload" expression="json-eval($.)"/>
+</log>
+
+<!-- 
+<call>
+    <endpoint>
+        <http method="POST" uri-template="http://flygateapitestvpn.azurewebsites.net/Lion/api/V1.0/Lion/ConfirmOrder">
+            <timeout>
+                <duration>60000</duration>
+                <responseAction>fault</responseAction>
+            </timeout>
+        </http>
+    </endpoint>
+</call> -->
+<call>
+    <endpoint key="confirmOrderEtEP"/>
+</call>
+
+
+  <!-- Capture response -->
+    <property name="StatusCodeResponse" expression="json-eval($.StatusCodeResponse)" scope="default"/>
+<property name="expireDate" expression="json-eval($.expireDate)" scope="default"/>
+
+  <property name="Status" expression="json-eval($.status)" scope="default"/>
+  <property name="StatusCodeResponseDescription" expression="json-eval($.remark)" scope="default"/>
+  <property name="ResponseDate" expression="get-property('currentDate')" scope="default"/>
+  <property name="RequestDate" expression="get-property('currentDate')" scope="default"/>
+
+  <!-- Conditional block to set Status -->
+  <filter xpath="get-property('Status') = '1'">
+    <then>
+           <log level="full">
+            <property name="expireDate" expression="json-eval($.expireDate)" scope="default"/>
+<property name="expireDate" expression="get-property('expireDate')" scope="default"/>
+
+    <property name=" sucessful  confirm airlines " value="sucessful  confirm airlines"/>
+</log>
+      <property name="Status" value="success" scope="default"/>
+    </then>
+    <else>
+           <log level="full">
+    <property name="failed confirm airlines" value="failed confirm airlines"/>
+</log>
+      <property name="Status" value="faild" scope="default"/>
+    </else>
+  </filter>
+
+  <script language="js"><![CDATA[
+    var expireDateStr = mc.getProperty('expireDate'); // e.g. "Jun 06, 2025 22:32"
+    if (expireDateStr != null && expireDateStr.trim() !== "") {
+        var months = {
+            "Jan": "01", "Feb": "02", "Mar": "03", "Apr": "04", "May": "05", "Jun": "06",
+            "Jul": "07", "Aug": "08", "Sep": "09", "Oct": "10", "Nov": "11", "Dec": "12"
+        };
+
+        var parts = expireDateStr.split(" ");
+        if (parts.length === 4) {
+            var monthNum = months[parts[0]];
+            var day = parts[1].replace(",", "");
+            var year = parts[2];
+            var time = parts[3];
+
+            if (monthNum && day && year && time) {
+                var formattedDate = year + "-" + monthNum + "-" + (day.length == 1 ? "0" + day : day) + " " + time + ":00";
+                mc.setProperty('expireDateFormatted', formattedDate);
+            } else {
+                // If parts missing or invalid, set null or empty
+                mc.setProperty('expireDateFormatted', null);
+            }
+        } else {
+            mc.setProperty('expireDateFormatted', null);
+        }
+    } else {
+        // expireDate is null or empty string
+        mc.setProperty('expireDateFormatted', null);
+    }
+]]></script>
+<script language="js"><![CDATA[
+   var currentDate = new Date();
+   // Format as yyyy-MM-dd HH:mm:ss
+   function pad(n){return n<10 ? '0'+n : n;}
+   var formattedDate = currentDate.getFullYear() + '-' +
+                       pad(currentDate.getMonth()+1) + '-' +
+                       pad(currentDate.getDate()) + ' ' +
+                       pad(currentDate.getHours()) + ':' +
+                       pad(currentDate.getMinutes()) + ':' +
+                       pad(currentDate.getSeconds());
+   mc.setProperty('currentDateFormatted', formattedDate);
+]]></script>
+
+ <log level="full">
+    <property name="expireDateFormatted" expression="get-property('expireDateFormatted')"/>
+</log>
+ <log level="full">
+    <property name="currentDateFormatted" expression="get-property('currentDateFormatted')"/>
+</log>
+
+  <!-- Save to database in all cases -->
+  <dbreport>
+    <connection>
+      <pool>
+        <dsName>jdbc/DbsBillPaymentDB</dsName>
+      </pool>
+    </connection>
+    <statement>
+      <sql>
+        INSERT INTO public.confirmorders (
+         "OrderId", "ShortCode", "Amount", "Currency", "Remark", "TraceNumber",
+          "ReferenceNumber", "PaidAccountNumber", "PayerCustomerName", "ExpireDate", "StatusCodeResponse",
+          "StatusCodeResponseDescription", "CustomerName", "MerchantId", "MerchantCode", "MerchantName",
+          "Message", "RequestDate", "ResponseDate", "ReferenceId", "Status"
+        )
+        VALUES ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+      </sql>
+           <parameter expression="json-eval($.orderId)" type="VARCHAR"/>
+      <parameter expression="json-eval($.shortCode)" type="VARCHAR"/>
+      <parameter expression="json-eval($.amount)" type="DOUBLE"/>
+      <parameter expression="json-eval($.currency)" type="VARCHAR"/>
+      <parameter expression="json-eval($.remark)" type="VARCHAR"/>
+      <parameter expression="json-eval($.traceNumber)" type="VARCHAR"/>
+      <parameter expression="json-eval($.ReferenceNumber)" type="VARCHAR"/>
+      <parameter expression="json-eval($.PaidAccountNumber)" type="VARCHAR"/>
+      <parameter expression="json-eval($.PayerCustomerName)" type="VARCHAR"/>
+     <parameter expression="get-property('expireDateFormatted')" type="TIMESTAMP"/>
+   <parameter expression="get-property('StatusCodeResponse')" type="NUMERIC"/>
+      <parameter expression="get-property('StatusCodeResponseDescription')" type="VARCHAR"/>
+      <parameter expression="json-eval($.CustomerName)" type="VARCHAR"/>
+      <parameter expression="json-eval($.MerchantId)" type="BIGINT"/>
+      <parameter expression="json-eval($.MerchantCode)" type="VARCHAR"/>
+      <parameter expression="json-eval($.MerchantName)" type="VARCHAR"/>
+      <parameter expression="json-eval($.Message)" type="VARCHAR"/>
+      <parameter expression="get-property('currentDateFormatted')" type="TIMESTAMP"/>
+      <parameter expression="get-property('currentDateFormatted')"  type="TIMESTAMP"/>
+      <parameter expression="get-property('id')" type="VARCHAR"/>
+      <parameter expression="json-eval($.Status)" type="VARCHAR"/>
+    </statement>
+  </dbreport>
+   <property name="HTTP_SC" value="200" scope="axis2"/>
+        
+          <payloadFactory media-type="json">
+            <format>
+                {
+                  "id": "$1",
+                "status": "success"
+                  
+                }
+            </format>
+            <args>
+                <arg expression="get-property('id')"/>
+                
+            </args>
+        </payloadFactory>
+
+    </then>
+
+    <else>
+        <dbreport>
+            <connection>
+                <pool>
+                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                </pool>
+            </connection>
+            <statement>
+                <sql>
+                    UPDATE public."airlinestransfer" 
+                    SET "ResponseStatus" = ?,
+                    "IsSucessful" = false,
+                        "MsgId" = ?,
+                        "PmtInfId" = ?,
+                        "InstrId" = ?,
+                        "EndToEndId" = ?
+                    WHERE "RequestId" = ?
+                </sql>
+                <parameter expression="get-property('pain002Xml')" type="VARCHAR"/>
+                <parameter expression="get-property('MsgId')" type="VARCHAR"/>              
+                <parameter expression="get-property('MsgId')" type="VARCHAR"/>
+                <parameter expression="get-property('PmtInfId')" type="VARCHAR"/>
+                <parameter expression="get-property('InstrId')" type="VARCHAR"/>
+                <parameter expression="get-property('EndToEndId')" type="VARCHAR"/>
+                <parameter expression="get-property('id')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+
+        <payloadFactory media-type="json">
+            <format>
+                {
+                  "id": "$1",
+                "status": "failed"
+                  
+                }
+            </format>
+            <args>
+                <arg expression="get-property('id')"/>
+                
+            </args>
+        </payloadFactory>
+
+        <respond/>
+    </else>
+</filter>
+         
+<respond/>
+                
+        </then>
+        <else>
+            <!-- Respond with error if invoiceId not found -->
+               <payloadFactory media-type="json">
+            <format>{
+                "id": "$1",
+                "type": "fos-confirmable-actions",
+                "attributes": {
+                    "kind": "string",
+                    "payload": {"any": ["Invalid request"]},
+                    "flow": "embedded",
+                    "state": "failed"
+                }
+            }</format>
+            <args>
+                <arg expression="get-property('id')"/>
+            </args>
+        </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </else>
+    </filter>
+
+
+
+
+
+
+
+
+
+    <log level="custom">
+        <property name="Action" value=">> Exiting excuteEtPaymentSeq sequence"/>
+    </log>
+
+
+</sequence>

@@ -1,13 +1,19 @@
 openapi: 3.0.1
 info:
-  title: ecPayment
-  description: API Definition of ecPayment
+  title: etCallback
+  description: API Definition of etCallback
   version: 1.0.0
 servers:
-- url: http://localhost:8290/ecPayment
+- url: http://localhost:8290/etcallback
 paths:
-  /:
-    post:
+  /{referenceNo}:
+    patch:
+      parameters:
+      - name: referenceNo
+        in: path
+        required: true
+        schema:
+          type: string
       requestBody:
         description: Sample Payload
         content:

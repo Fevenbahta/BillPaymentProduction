@@ -1,0 +1,98 @@
+<sequence xmlns="http://ws.apache.org/ns/synapse" name="getBillAccountInfo">
+
+    <!-- Entry log -->
+    <log level="custom">
+        <property name="Action" value=">> Entering getAccountInfo sequence"/>
+        <property name="DAccountNo" expression="get-property('DAccountNo')" scope="default"/>
+    </log>
+
+ 
+
+    <!-- Backup original payload -->
+    <enrich>
+        <source type="body"/>
+        <target type="property" property="originalPayload"/>
+    </enrich>
+
+    <property name="DAccountNo" expression="get-property('DAccountNo')" scope="default"/>
+
+    <dblookup>
+        <connection>
+       <pool>
+            <driver>oracle.jdbc.driver.OracleDriver</driver>
+             <url>jdbc:oracle:thin:@10.1.10.132:2110:libampdb</url>    
+            <user>mis_user</user>
+            <password>misuser</password>
+        </pool>
+    </connection>
+    <statement>
+        <sql>
+            SELECT FULL_NAME ,BRANCH,KEY
+            FROM anbesaprod.valid_accounts2 
+            WHERE ACCOUNTNUMBER = ?
+        </sql>
+            <parameter expression="get-property('DAccountNo')" type="VARCHAR"/>
+            <result name="accountHolderName" column="FULL_NAME"/>
+            <result name="branch" column="BRANCH"/>
+            <result name="key" column="KEY"/>
+        </statement>
+    </dblookup>
+    <log> <property name="accountHolderName" expression="get-property('accountHolderName')" />
+    <property name="branch" expression="get-property('branch')" />
+
+    <!-- Extract accountNumber from JSON payload -->
+    <property name="accountNumber" expression="json-eval($.accountNumber)" scope="default"/>
+</log>
+
+    <property name="accountHolderName" expression="get-property('accountHolderName')" />
+    <property name="branch" expression="get-property('branch')" />
+
+   
+    <!-- Validate accountNumber -->
+ <script language="js"><![CDATA[
+
+var accountNumber = mc.getProperty('branch');
+if (!accountNumber || accountNumber.trim() === '') {
+    mc.setProperty('HTTP_SC', '400');
+    mc.setProperty('ERROR_MESSAGE', 'account not found');
+   var errorPayload = {
+  status: "invalid",
+  error: "account not found"
+};
+mc.setPayloadJSON(errorPayload);
+   mc.setPayloadJSON(errorPayload);
+
+    mc.setProperty('NO_ENTITY_BODY', 'false');
+    mc.setProperty('RESPONSE', 'true');
+
+    mc.setProperty('STOP_PROCESSING', 'true'); // flag for later filter
+}
+
+]]></script>
+
+
+    <log level="custom">
+        <property name="DebitedAccount (accountNumber)" expression="get-property('accountNumber')"/>
+    </log>
+
+    <log level="full"/>
+
+<filter source="get-property('STOP_PROCESSING')" regex="true">
+    <then>
+         <property name="HTTP_SC" value="400" scope="axis2" type="STRING"/>
+        <respond/>
+    </then>
+</filter>
+
+    <!-- Restore original request body -->
+    <enrich>
+        <source type="property" property="originalPayload"/>
+        <target type="body"/>
+    </enrich>
+
+    <!-- Exit log -->
+    <log level="custom">
+        <property name="Action" value=" Exiting getAccountInfo sequence"/>
+    </log>
+
+</sequence>

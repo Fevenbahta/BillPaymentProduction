@@ -1,0 +1,90 @@
+<sequence xmlns="http://ws.apache.org/ns/synapse" name="RechargeTopUpSequence">
+    
+    <!-- Start Log -->
+    <log level="full">
+        <property name="Step" value="Start RechargeTopUpSequence"/>
+        <property name="phoneNo" expression="get-property('phoneNo')"/>
+                <property name="referenceNo" expression="get-property('referenceNo')"/>
+        <property name="paymentAmount" expression="get-property('paymentAmount')"/>
+    </log>
+<script language="js"><![CDATA[
+    // Get the 'paymentAmount' property from the message context
+    var paymentAmount = mc.getProperty('paymentAmount');
+    
+    // Remove decimal part (e.g., "20.00" -> "20")
+    if(paymentAmount != null) {
+        var intAmount = paymentAmount.toString().split('.')[0];
+        mc.setProperty('paymentAmountNoDecimal', intAmount);
+    }
+]]></script>
+
+    <!-- Prepare the JSON payload -->
+    <payloadFactory media-type="json">
+        <format>
+            {
+  "mobile": "$1",
+  "amount": "$2",
+  "referenceNo": "$3",
+  "status": "$4",
+  "debitAccount": "$5"
+}
+
+        </format>
+        <args>
+            <arg expression="get-property('phoneNo')"/>
+            <arg expression="get-property('paymentAmountNoDecimal')"/>
+              <arg expression="get-property('dbsReferenceNo')"/>
+                            <arg expression="get-property('topupStatus')"/>
+                                          <arg expression="get-property('debtorAccountId')"/>
+        </args>
+    </payloadFactory>
+
+    <!-- Log JSON Payload -->
+    <log level="full">
+        <property name="Step" value="Payload After PayloadFactory"/>
+        <property name="Payload" expression="json-eval($.)"/>
+    </log>
+
+    <!-- Set headers and properties -->
+    <header name="Content-Type" value="application/json" scope="transport"/>
+    <property name="HTTP_METHOD" value="POST" scope="axis2"/>
+    <!-- <property name="REST_URL_POSTFIX" value="/api/topUp/recharge" scope="axis2" type="STRING"/> -->
+    <property name="OUT_ONLY" value="false" scope="default" type="BOOLEAN"/>
+
+    <!-- Call the external API -->
+    <!-- <call>
+        <endpoint>
+            <address uri="http://10.1.7.4:8084/api/v1/airtime/top-up"/>
+        </endpoint>
+    </call> -->
+    <call>
+    <endpoint key="airtimeTopUpEP"/>
+</call>
+
+      <property name="isSuccess" expression="json-eval($.status)" scope="default"/>
+
+ 
+    <!-- Log Response -->
+    <log level="full">
+        <property name="Step" value="Received Response"/>
+        <property name="HTTP Status" expression="get-property('HTTP_SC')"/>
+        <property name="ResponsePayload" expression="json-eval($.)"/>
+    </log>
+
+    <!-- Filter on HTTP 200 only -->
+    <!-- <filter source="get-property('HTTP_SC')" regex="200">
+        <then>
+            <log level="custom">
+                <property name="RechargeStatus" value="Success"/>
+            </log>
+        </then>
+        <else>
+            <log level="custom">
+                <property name="RechargeStatus" value="Failed"/>
+                <property name="HTTP Status" expression="get-property('HTTP_SC')"/>
+            </log>
+            <property name="RECHARGE_ERROR" value="Top-up failed. HTTP status not 200" scope="default"/>
+            <drop/>
+        </else>
+    </filter> -->
+</sequence>

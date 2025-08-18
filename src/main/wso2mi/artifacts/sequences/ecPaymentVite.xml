@@ -1,0 +1,578 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="ecPaymentVite" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <log level="custom">
+        <property name="Action" value=">> Entering ecPaymentSeq sequence"/>
+        <property name="DAccountNo" expression="get-property('DAccountNo')" scope="default"/>
+    </log>
+      <log level="custom">
+        <property name="message" value="Saving EC Payment Request"/>
+    </log>
+
+    <!-- Extract and validate payload -->
+    <property name="payload" expression="json-eval($)" scope="default" type="STRING"/>
+<script language="js"> 
+<![CDATA[
+    var p = JSON.parse(mc.getProperty("payload"));
+
+    var missing = [];
+
+    // Always check for these fields
+    if (!p.billerType) missing.push("billerType");
+    if (!p.invoiceId) missing.push("invoiceId");
+    if (!p.customerId) missing.push("customerId");
+    if (!p.reason) missing.push("reason");
+    if (!p.paymentAmount) missing.push("paymentAmount");
+    if (!p.branch) missing.push("branch");
+    if (!p.accountNo) missing.push("accountNo");
+    if (!p.providerId) missing.push("providerId");
+ 
+    // Conditionally require phoneNo if billerType is topup
+    if (p.billerType && p.billerType.toUpperCase() === "TOPUP") {
+        if (!p.customerId) {
+            missing.push("customerId");
+        }
+
+        // Validate that topup amount > 5
+        if (p.paymentAmount && Number(p.paymentAmount) < 5) {
+            mc.setProperty("ERROR_MESSAGE", "Topup amount must be greater than 5");
+            mc.setProperty("ERROR_CODE", "400");
+            // Stop further processing
+            throw "Validation failed: Topup amount too low";
+        }
+    }
+
+    if (missing.length > 0) {
+        mc.setProperty("ERROR_MESSAGE", "Missing: " + missing.join(", "));
+        mc.setProperty("ERROR_CODE", "400");
+    } else {
+        mc.setProperty("billerType", p.billerType);
+        mc.setProperty("customerCode", p.customerCode);
+        mc.setProperty("invoiceId", p.invoiceId);
+        mc.setProperty("customerId", p.customerId);
+        mc.setProperty("reason", p.reason);
+        mc.setProperty("paymentAmount", p.paymentAmount);
+        mc.setProperty("branch", p.branch);
+        mc.setProperty("accountNo", p.accountNo);
+        mc.setProperty("providerId", p.providerId);
+       
+        // Optionally set phoneNo if available
+        if (p.customerId) {
+            mc.setProperty("phoneNo", p.customerId);
+        }
+    }
+]]>
+</script>
+
+<script language="js"><![CDATA[
+   var uuid = java.util.UUID.randomUUID().toString();
+   mc.setProperty("referenceNo", uuid);
+]]></script>
+
+
+    <property name="payload" expression="json-eval($)" scope="default"/>
+    <property name="referenceNo" expression="get-property('referenceNo')" scope="default"/>
+
+    <!-- Log initial information -->
+    <log level="custom">
+        <property name="message" value="Processing EC Payment via ussd"/>
+        <property name="payload" expression="json-eval($)" scope="default"/>
+         <property name="referenceNo" expression="get-property('referenceNo')" scope="default"/>
+
+           </log>
+<script language="js">
+    var currentDate = new Date();
+    var isoString = currentDate.toISOString().replace('Z', ''); // e.g. "2024-03-26T08:10:18.478"
+    
+    // Generate random 9-digit nano (without padding)
+    var nano = Math.floor(Math.random() * 1e9).toString();
+    
+    // Replace milliseconds with nano
+    var formattedDate = isoString.split('.')[0] + '.' + nano;
+    
+    mc.setProperty('currentDate', formattedDate);
+</script>
+
+
+
+    <filter xpath="get-property('ERROR_CODE')">
+        <then>
+            <payloadFactory media-type="json">
+                <format>
+                    {"status":"ERROR","message":"$1"}
+                </format>
+                <args>
+                    <arg expression="get-property('ERROR_MESSAGE')"/>
+                </args>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </then>
+        <else>
+            <!-- Save the request in DB -->
+            <dbreport>
+                <connection>
+                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                </connection>
+                <statement>
+                    <sql>
+                        INSERT INTO public."ECPaymentRecords" (
+                            "BillerType", "CustomerCode", "InvoiceId", "ReferenceNo", "CustomerId",
+                            "Reason", "PaymentAmount", "PaymentDate", "Branch", "Currency",
+                            "AccountNo", "ProviderId", "Status", "dbsUserId","phoneNo"
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, now(), ?, ?, ?, ?, ?,?,?)
+                    </sql>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                    <parameter expression="get-property('customerCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('invoiceId')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('customerId')" type="VARCHAR"/>
+                    <parameter expression="get-property('reason')" type="VARCHAR"/>
+                    <parameter expression="get-property('paymentAmount')" type="DECIMAL"/>
+                    <parameter expression="get-property('branch')" type="VARCHAR"/>
+                    <parameter value="001" type="VARCHAR"/>
+                    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('providerId')" type="VARCHAR"/>
+             
+                    <parameter value="pending" type="VARCHAR"/>
+                    <parameter expression="get-property('userId')" type="VARCHAR"/>
+                         <parameter expression="get-property('phoneNo')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+
+
+        </else></filter>
+    <!-- Log retrieved database information -->
+    <log level="custom">
+        <property name="providerId" expression="get-property('providerId')"/>
+        <property name="invoiceId" expression="get-property('invoiceId')"/>
+        <property name="customerId" expression="get-property('customerId')"/>
+        <property name="branch" expression="get-property('branch')"/>
+        <property name="accountNo" expression="get-property('accountNo')"/>
+        <property name="reason" expression="get-property('reason')"/>
+        <property name="paymentAmount" expression="get-property('paymentAmount')"/>
+        <property name="billerType" expression="get-property('billerType')"/>
+    </log>
+
+    <!-- Check if invoiceId exists -->
+    <filter xpath="boolean(get-property('paymentAmount'))">
+        <then>
+
+            <!-- Check if billerType is 'topup' -->
+            <filter xpath="get-property('billerType') = 'topup'">
+                   <then>
+
+<log level="simple">
+         <property name="billerType" expression="get-property('billerType')"/>
+              <property name="billerType" value="topup innn "/>
+</log>
+
+   <property name="uuid" expression="fn:concat('REQ-', uuid:true())" scope="default"/>
+        <property name="timestamp" expression="get-property('currentDate')" scope="default"/>
+<script language="js"><![CDATA[
+    var now = java.time.LocalDateTime.now();
+    var formatter = java.time.format.DateTimeFormatter.ofPattern("yyyyMMddHHmmssSSS");
+    var timestampPart = now.format(formatter);
+    
+    function randomAlphaNumeric(length) {
+        var chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789";
+        var sb = new java.lang.StringBuilder();
+        for (var i = 0; i < length; i++) {
+            var index = Math.floor(Math.random() * chars.length);
+            sb.append(chars.charAt(index));
+        }
+        return sb.toString();
+    }
+
+    var requestId = timestampPart + Math.floor(Math.random() * 900 + 100); // e.g. 2024060911351099912
+    var msgId = randomAlphaNumeric(20).toUpperCase();                     // e.g. 31OHEOE87IJ84RRFTFD
+    var pmtInfId = randomAlphaNumeric(18).toUpperCase();                 // e.g. FAHTYY9RLJXCR6B4FD
+    var instrId = randomAlphaNumeric(32);                                // e.g. 01PDTE4r085ET1EY6ALS003QFWND0I
+    var endToEndId = randomAlphaNumeric(32);                             // e.g. F5O5PrR5RITRRY67ZS4Q0QFIUHD7S
+    var ustrd = randomAlphaNumeric(28).toUpperCase();                    // e.g. 35587E48PrUXTR1B2AD
+
+    mc.setProperty("requestId", requestId);
+    mc.setProperty("msgId", msgId);
+    mc.setProperty("pmtInfId", pmtInfId);
+    mc.setProperty("instrId", instrId);
+    mc.setProperty("endToEndId", endToEndId);
+    mc.setProperty("ustrd", ustrd);
+]]></script>
+
+
+        <!-- Use dynamic debtor branch, account and payment amount -->
+        <property name="debtorBranchId" expression="get-property('branch')" scope="default"/>
+        <property name="debtorAccountId" expression="get-property('accountNo')" scope="default"/>
+        <property name="paymentAmount" expression="get-property('paymentAmount')" scope="default"/>
+<property name="dbsReferenceNo" expression="get-property('referenceNo')"/>
+  
+    <property name="id" expression="get-property('referenceNo')"/>
+        <!-- For creditor, you can also set dynamically or hardcode for now -->
+        <property name="creditorAccountId" value="24101900001" scope="default"/>
+        <property name="creditorBranchId" value="00001" scope="default"/>
+<script language="js"><![CDATA[
+    // Get the 'paymentAmount' property from the message context
+    var paymentAmount = mc.getProperty('paymentAmount');
+    
+    // Remove decimal part (e.g., "20.00" -> "20")
+    if(paymentAmount != null) {
+        var intAmount = paymentAmount.toString().split('.')[0];
+        mc.setProperty('paymentAmountNoDecimal', intAmount);
+    }
+]]></script>
+<log level="custom">
+    <property name="id" expression="get-property('referenceNo')"/>
+    <property name="dbsReferenceNo" expression="get-property('referenceNo')"/>
+    <property name="timestamp" expression="get-property('timestamp')"/>
+    <property name="msgId" expression="get-property('msgId')"/>
+    <property name="pmtInfId" expression="get-property('pmtInfId')"/>
+    <property name="instrId" expression="get-property('instrId')"/>
+    <property name="endToEndId" expression="get-property('endToEndId')"/>
+    <property name="debtorAccountId" expression="get-property('debtorAccountId')"/>
+    <property name="debtorBranchId" expression="get-property('debtorBranchId')"/>
+    <property name="creditorAccountId" expression="get-property('creditorAccountId')"/>
+    <property name="creditorBranchId" expression="get-property('creditorBranchId')"/>
+    <property name="paymentAmountNoDecimal" expression="get-property('paymentAmountNoDecimal')"/>
+</log>
+  <sequence key="createTransferForTopUp"/>
+ 
+    <log category="INFO" level="full"/>
+
+ <property name="pain002Xml" expression="fn:normalize-space(//fjs1:pain002/text())" scope="default" xmlns:fjs1="http://soprabanking.com/amplitude"/>
+     
+<script language="js"><![CDATA[
+    var raw = mc.getProperty('pain002Xml');
+    var xml = String(raw); // Ensure it's treated as a JavaScript string
+
+    if (xml.indexOf('<TxSts>ACSP</TxSts>') > -1 || xml.indexOf('<DtldSts>ACSP</DtldSts>') > -1||xml.indexOf('<PmtInfSts>ACSP</PmtInfSts>') > -1) {
+        mc.setProperty('Status', 'SUCCESS');
+    } else {
+        mc.setProperty('Status', 'FAILURE');
+    }
+]]></script>
+ 
+<script language="js"><![CDATA[
+    var raw = mc.getProperty('pain002Xml');
+    var xml = String(raw); // Ensure it's treated as a string
+
+    if (xml.indexOf('<TxSts>ACSP</TxSts>') > -1 || xml.indexOf('<DtldSts>ACSP</DtldSts>') > -1) {
+        mc.setProperty('Status', 'SUCCESS');
+    } else {
+        mc.setProperty('Status', 'FAILURE');
+
+        // Try to extract AddtlInf for error message
+        var addtlInfMatch = xml.match(/<AddtlInf>(.*?)<\/AddtlInf>/);
+        if (addtlInfMatch && addtlInfMatch[1]) {
+            mc.setProperty('ErrorMessage', addtlInfMatch[1]);
+        } else {
+            mc.setProperty('ErrorMessage', 'Unknown error');
+        }
+    }
+]]></script>
+
+
+<log level="custom">
+    <property name="Status" expression="get-property('Status')"/>
+</log>
+
+
+<log level="custom">
+    <property name="ExtractedPain002" expression="get-property('Status')"/>
+</log>
+
+   
+
+
+<filter xpath="get-property('Status') = 'SUCCESS'">   
+            <then>
+                 <property name="topupStatus" value="SUCCESS"/>
+          
+            <!-- Success block: ACSP found -->
+            <log level="custom">
+                <property name="Status" value="SUCCESS - ACSP Found"/>
+            </log>
+            <!-- Continue with normal processing or respond -->
+        </then>
+        <else>
+              <property name="topupStatus" value="FAIL"/>
+        
+            <!-- Failure block: ACSP not found -->
+            <log level="custom">
+                <property name="Status" value="FAILURE - ACSP Not Found"/>
+            </log>
+            <!-- Handle failure case (e.g., fault, response, redirect, etc.) -->
+        </else>
+    </filter>
+
+
+        <filter xpath="get-property('Status') = 'SUCCESS'">   
+    <then>
+          <!-- Success block: ACSP found -->
+            <log level="custom">
+                <property name="Status" value="SUCCESS - ACSP Found"/>
+            </log>
+
+        <log level="full"/>
+                <dbreport>
+                                <connection>
+                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                </connection>
+                                <statement>
+                                    <sql>
+                                        UPDATE public."ECPaymentRecords" SET "Status" = 'corebanking success' WHERE "ReferenceNo" = ? 
+                                    </sql>
+                                    <parameter expression="get-property('id')" type="VARCHAR"/>
+                                </statement>
+                            </dbreport>
+            
+
+
+              <sequence key="RechargeTopUpSequence"/>
+
+          <property name="isSuccess" expression="json-eval($.status)" scope="default"/>
+
+    <!-- Filter: proceed only if success is true -->
+    <filter source="get-property('isSuccess')" regex="SUCCESS">
+        <then>
+            <!-- <payloadFactory media-type="json">
+                <format>{"status":"ACCEPTED","referenceNo":"$1"}</format>
+                <args>
+                    <arg expression="get-property('referenceNo')"/>
+                </args>
+            </payloadFactory> -->
+
+
+   <payloadFactory media-type="json">
+    <format>
+        {
+            "id": "$1",
+            "status": "ACCEPTED"
+        }
+    </format>
+    <args>
+        <arg expression="get-property('id')"/>
+    </args>
+</payloadFactory>
+
+                <dbreport>
+                                <connection>
+                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                </connection>
+                                <statement>
+                                    <sql>
+                                        UPDATE public."ECPaymentRecords" SET "Status" = 'core and topup success' WHERE "ReferenceNo" = ? 
+                                    </sql>
+                                    <parameter expression="get-property('id')" type="VARCHAR"/>
+                                </statement>
+                            </dbreport>
+            <respond/>
+        </then>
+        <else>
+                <dbreport>
+                                <connection>
+                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                </connection>
+                                <statement>
+                                    <sql>
+                                        UPDATE public."ECPaymentRecords" SET "Status" = 'core success but topup fail' WHERE "ReferenceNo" = ?
+                                    </sql>
+                                    <parameter expression="get-property('id')" type="VARCHAR"/>
+                                </statement>
+                            </dbreport>
+     
+   <payloadFactory media-type="json">
+    <format>
+        {
+            
+                "id": "$1",
+                "status": "Failed"
+        
+        }
+    </format>
+    <args>
+        <arg expression="get-property('id')"/>
+    </args>
+</payloadFactory>
+<property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </else>
+    </filter>
+        </then>
+        <else>
+             <log level="custom">
+                <property name="Status" value="FAILURE - ACSP Not Found"/>
+            </log>
+   
+                <dbreport>
+                                <connection>
+                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                </connection>
+                                <statement>
+                                    <sql>
+                                        UPDATE public."ECPaymentRecords" SET "Status" = 'core banking fail' WHERE "ReferenceNo" = ?
+                                    </sql>
+                                    <parameter expression="get-property('id')" type="VARCHAR"/>
+                                </statement>
+                            </dbreport>
+            <!-- Failure block -->
+       <payloadFactory media-type="json">
+    <format>
+        {
+           "status": "FAILED",
+                "id": "$1"
+            
+        }
+    </format>
+    <args>
+        <arg expression="get-property('id')"/>
+    </args>
+</payloadFactory>
+<property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </else>
+    </filter>
+
+                </then>
+           <else>
+    <!-- Prepare payment request payload -->
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "billerType": "$1",
+                "invoiceId": "$2",
+                "providerId": "$3",
+                "paymentAmount": "$4",
+                "accountNo": "$5",
+                "reason": "$6",
+                "branch": "$7"
+            }
+        </format>
+        <args>
+            <arg expression="get-property('billerType')"/>
+            <arg expression="get-property('invoiceId')"/>
+            <arg expression="get-property('providerId')"/>
+            <arg expression="get-property('paymentAmount')"/>
+            <arg expression="get-property('accountNo')"/>
+            <arg expression="get-property('reason')"/>
+            <arg expression="get-property('branch')"/>
+        </args>
+    </payloadFactory>
+    
+    <log level="full" separator="Payment Request Payload:"/>
+
+    <!-- Call payment endpoint -->
+
+       <header name="Content-Type" value="application/json" scope="transport"/>
+    <header name="mob_token" value="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuI6Sn1iDQMk85y8b6i7R2C9T8AenuVeOwPNvma9pK6uO1iWgUIItSFW" scope="transport"/>
+
+    <log level="custom">
+        <property name="PayloadForAPI" expression="get-property('payload')" />
+    </log>
+
+
+    <!-- <call>
+        <endpoint>
+            <address uri="http://10.1.8.45:7070/api/transactions/EXT_P/make_payment"/>
+        </endpoint>
+    </call> -->
+    <call>
+    <endpoint key="makePaymentBillEP"/>
+</call>
+
+
+    <log level="full" separator="Payment Response:"/>
+
+    <!-- Extract response details -->
+    <property name="responseStatus" expression="json-eval($.status)" scope="default"/>
+    <property name="transactionId" expression="json-eval($.transactionId)" scope="default"/>
+    <property name="errorMessage" expression="json-eval($.message)" scope="default"/>
+    
+    <!-- Store the full response in property -->
+    <property name="fullResponse" expression="json-eval($)" scope="default"/>
+
+    <!-- Check if payment was successful -->
+    <filter xpath="get-property('responseStatus') = 'Accepted'">
+        <then>
+            <!-- Update payment status to success -->
+            <dbreport>
+                <connection>
+                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                </connection>
+                <statement>
+                    <sql>
+                        UPDATE public."ECPaymentRecords" 
+                        SET "Status" = 'success',
+                                 "Response" = ?
+                        WHERE "ReferenceNo" = ?
+                    </sql>
+                       <parameter expression="get-property('fullResponse')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+
+            <!-- Respond with success -->
+            <payloadFactory media-type="json">
+                <format>{"status":"ACCEPTED","referenceNo":"$1"}</format>
+                <args>
+                    <arg expression="get-property('referenceNo')"/>
+                </args>
+            </payloadFactory>
+            <respond/>
+        </then>
+        <else>
+            <!-- Update payment status to fail with error details -->
+            <dbreport>
+                <connection>
+                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                </connection>
+                <statement>
+                    <sql>
+                        UPDATE public."ECPaymentRecords" 
+                        SET "Status" = 'FAILED',
+                            "ResponseError" = ?,
+                            "Response" = ?
+                        WHERE "ReferenceNo" = ?
+                    </sql>
+                    <parameter expression="get-property('errorMessage')" type="VARCHAR"/>
+                    <parameter expression="get-property('fullResponse')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+
+            <!-- Respond with failure reason -->
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "status": "FAILED",
+                        "referenceNo": "$1",
+                        "reason": "$2",
+                      
+                    }
+                </format>
+                <args>
+                    <arg expression="get-property('referenceNo')"/>
+                    <arg expression="get-property('errorMessage')"/>
+                  
+                </args>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </else>
+    </filter>
+</else>
+            </filter>
+        </then>
+        <else>
+            <!-- Respond with error if invoiceId not found -->
+            <payloadFactory media-type="json">
+                <format>{"status":"ERROR","message":"Reference not found"}</format>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </else>
+    </filter>
+
+       <log level="custom">
+        <property name="Action" value=">> Exiting ecPaymentSeq sequence"/>
+        <property name="DAccountNo" expression="get-property('DAccountNo')" scope="default"/>
+    </log>
+</sequence>

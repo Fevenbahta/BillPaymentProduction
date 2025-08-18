@@ -1,37 +1,50 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<sequence xmlns="http://ws.apache.org/ns/synapse" name="validateBillGetPayload">
-    <log level="full"/>
-    <script language="js">
+<sequence name="etValidationUSSDSeq" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+  <log level="full">
+    <property name="ValidationStage" value="Start Payload Validation"/>
+  </log>
+
+
+      <script language="js">
         var payload = mc.getPayloadJSON();
-        var providerId = payload.providerId;
-        var uniqueCode = payload.uniqueCode;
-        var phoneNumber = payload.phoneNumber;
+        var paymentAmount = payload.paymentAmount;
+        var accountNo = payload.accountNo;
+        var customerCode = payload.customerCode;
         var billerType = payload.billerType;
-        var referenceNo = payload.referenceNo;
-    
+  
+        var invoiceId = payload.invoiceId;
         
 
     // Set values as properties for use in the sequence
-    mc.setProperty("providerId", providerId);
-    mc.setProperty("identifierValue", uniqueCode);
-    mc.setProperty("phoneNumber", phoneNumber);
+    mc.setProperty("amount", paymentAmount);
+    mc.setProperty("identifierValue", accountNo);
+    mc.setProperty("orderId", customerCode);
+    mc.setProperty("invoiceId", invoiceId);
 
         // Validation logic: Ensure required fields are present and valid
         var missingFields = [];
         
-        // Check if either providerId and uniqueCode are present, or phoneNumber is present
-        if (!phoneNumber &amp;&amp;  (!providerId || !uniqueCode)) {
-            missingFields.push("Either providerId and uniqueCode or phoneNumber must be provided.");
-        }
+        // Check if either amount and accountNo are present, or customerCode is present
+      if (!customerCode) {
+    missingFields.push("customerCode must be provided.");
+}
+if (!paymentAmount) {
+    missingFields.push("paymentAmount must be provided.");
+}
+if (!accountNo) {
+    missingFields.push("accountNo must be provided.");
+}
+
 
         // Check for other required fields
         if (!billerType) {
             missingFields.push("billerType");
         }
-        if (!referenceNo) {
-            missingFields.push("referenceNo");
+      
+        if (!invoiceId) {
+            missingFields.push("invoiceId");
         }
-       
 
         // If any fields are missing, set error response
         if (missingFields.length > 0) {
@@ -68,16 +81,11 @@
             // Now, use the Respond mediator to terminate the flow
             mc.setProperty("terminateFlow", "true");  // Flag to stop further processing
         } else {
-            // If validation passes, determine the sequence to route to
-            if (providerId &amp;&amp;  uniqueCode) {
-                mc.setProperty("sequenceToInvoke", "getbilldetailsequence");
-            } else if (phoneNumber) {
-                mc.setProperty("sequenceToInvoke", "getbilllistsequence");
-            }
+          
         }
     </script>
 
-    <!-- After validation, decide which sequence to route to -->
+
  <switch source="get-property('terminateFlow')">
     <case regex="true">
           <property name="HTTP_SC" value="400" scope="axis2" type="INTEGER"/>
@@ -89,37 +97,11 @@
         <!-- Stop the flow if validation fails -->
         <respond/>
     </case>
-    <default>
-        <!-- Log when continuing to check which sequence to invoke -->
-        <log level="custom">
-            <property name="Info" value="Validation passed, determining sequence to invoke."/>
-        </log>
-        
-        <switch source="get-property('sequenceToInvoke')">
-            <case regex="getbilldetailsequence">
-                <!-- Log when invoking getbilldetailsequence -->
-                <log level="custom">
-                    <property name="Info" value="Invoking getbilldetailsequence."/>
-                </log>
-                <!-- Invoke the getbilldetailsequence if validation passed -->
-                <sequence key="getbilldetailsequence"/>
-            </case>
-            <case regex="getbilllistsequence">
-                <!-- Log when invoking getbilllistsequence -->
-                <log level="custom">
-                    <property name="Info" value="Invoking getbilllistsequence."/>
-                </log>
-                <!-- Invoke the getbilllistsequence if validation passed -->
-                <sequence key="getbilllistsequence"/>
-            </case>
-            <default>
-                <!-- Log when no valid sequence is found -->
-                <log level="custom">
-                    <property name="Info" value="Validation failed or invalid conditions, no valid providerId, uniqueCode, or phoneNumber."/>
-                </log>
-            </default>
-        </switch>
-    </default>
-</switch>
+    <default></default></switch>
+  <log level="custom">
+    <property name="ValidationStage" value="Payload Validation Completed Successfully"/>
+  </log>
+
+
 
 </sequence>

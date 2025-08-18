@@ -1,0 +1,314 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="initiateAwachPayment" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+<sequence key="awachValidationSequence"/>
+
+
+<property name="InvoiceId" expression="json-eval($.invoiceId)"/>
+
+<property name="Amount" expression="json-eval($.paymentAmount)"/>
+<property name="DAccountNo" expression="json-eval($.accountNo)"/>
+<property name="CAccountNo" value="1100223344"/>
+<property name="CAccountName" value="Awach Gl"/>
+<property name="ResponseStatus" value="Pending"/>
+<property name="ErrorReason" value=""/>
+<property name="IsSuccessful" value="false"/>
+<property name="OrderId" expression="json-eval($.customerCode)"/>
+<property name="MerchantCode" value="526341"/>
+<property name="DbsUserId" expression="json-eval($.dbsUserId)"/>
+<!-- Hardcoded values -->
+<property name="updatedBy" value="Customer"/>
+<property name="approvedBy" value="Customer"/>
+<property name="requestedBy" value="DBS"/>
+<property name="DAccountBranch" expression="json-eval($.branch)"/>
+<property name="dbsReferenceNo" expression="json-eval($.referenceNo)"/>
+<log level="full"/>
+
+
+   <sequence key="getBillAccountInfo"/>
+    <sequence key="decodeAndValidateTokenSeq"/>
+               <sequence key="ClientCredentialsTokenSequence"/> 
+                       <script language="js"><![CDATA[
+    // Get the 'paymentAmount' property from the message context
+    var paymentAmount = mc.getProperty('Amount');
+    
+    // Remove decimal part (e.g., "20.00" -> "20")
+    if(paymentAmount != null) {
+        var intAmount = paymentAmount.toString().split('.')[0];
+        mc.setProperty('paymentAmount', intAmount);
+    }
+]]></script>
+
+<script language="js">
+    var currentDate = new Date();
+    var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0]; // Formats as yyyy-MM-dd HH:mm:ss
+    mc.setProperty('currentDate', formattedDate);
+</script>
+
+
+<script language="js"><![CDATA[
+    var uuid = java.util.UUID.randomUUID().toString();
+    var prefixedUuid = uuid;
+    mc.setProperty("referenceNo", prefixedUuid);
+]]></script>
+
+<log level="custom"><property name="Generated ReferenceNo" expression="get-property('referenceNo')"/></log>
+
+<property name="ReferenceNo" expression="get-property('referenceNo')"/>
+
+<property name="RequestId" expression="get-property('referenceNo')"/>
+
+   <filter xpath="get-property('ERROR_CODE')">
+        <then>
+            <payloadFactory media-type="json">
+                <format>
+                    {"status":"ERROR","message":"$1"}
+                </format>
+                <args>
+                    <arg expression="get-property('ERROR_MESSAGE')"/>
+                </args>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </then>
+        <else>
+            <!-- Save the request in DB -->
+         
+<dbreport>
+    <connection>
+        <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+    </connection>
+    <statement>
+        <sql>
+            INSERT INTO public."awachtransfer" (
+                 "RequestId",
+                "Amount", "DAccountNo", "CAccountNo", "DAccountBranch", "CAccountName", 
+                "TransferDate", "ResponseStatus", "ErrorReason", "IsSuccessful", "OrderId", "ReferenceNo", "DbsUserId", "updatedBy", "approvedBy", "requestedBy", 
+                "DAccountName","dbsReferenceNo","InvoiceId"
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,?,?);
+        </sql>
+
+
+        <parameter expression="get-property('RequestId')" type="VARCHAR"/>
+           <parameter expression="get-property('Amount')" type="DECIMAL"/>
+        <parameter expression="get-property('DAccountNo')" type="VARCHAR"/>
+        <parameter expression="get-property('CAccountNo')" type="VARCHAR"/>
+        <parameter expression="get-property('branch')" type="VARCHAR"/>
+        <parameter expression="get-property('CAccountName')" type="VARCHAR"/>
+  <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+        <parameter expression="get-property('ResponseStatus')" type="VARCHAR"/>
+        <parameter expression="get-property('ErrorReason')" type="VARCHAR"/>
+      
+        <parameter expression="get-property('IsSuccessful')" type="BIT"/>
+        <parameter expression="get-property('OrderId')" type="VARCHAR"/>
+        <parameter expression="get-property('ReferenceNo')" type="VARCHAR"/>
+       <parameter expression="get-property('DbsUserId')" type="VARCHAR"/>
+        <parameter expression="get-property('updatedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('approvedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('requestedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('accountHolderName')" type="VARCHAR"/>
+            <parameter expression="get-property('dbsReferenceNo')" type="VARCHAR"/>
+        <parameter expression="get-property('invoiceId')" type="VARCHAR"/>
+    </statement>
+</dbreport>
+
+    <log level="custom">
+        <property name="INFO" value="Calling GetAccessTokenSequence"/>
+    </log>
+
+    <!-- Call the token sequence -->
+
+              <sequence key="ClientCredentialsTokenSequence"/> 
+
+
+<log level="custom">
+
+    <property name="accessTokensecond" expression="get-property('accessToken')"/>
+    
+    <property name="id" expression="get-property('id')"/>
+</log>
+
+<property name="callbackUrl" expression="fn:concat('https://api-in.anbesabank.et/billpayment/v3/billcallback/', get-property('referenceNo'))" scope="default" type="STRING"/>
+
+<property name="Authorization" expression="fn:concat('Bearer ', get-property('accessToken'))" scope="transport"/>
+<property name="Content-Type" value="application/json" scope="transport"/>
+<log level="custom">
+    <property name="referenceNo" expression="get-property('referenceNo')"/>
+    <property name="userId" expression="get-property('userId')"/>
+    <property name="callbackUrl" expression="get-property('callbackUrl')"/>
+    <property name="accessToken" expression="get-property('accessToken')"/>
+</log>
+
+<payloadFactory media-type="json">
+    <format>{
+        "uuid": "$1",
+        "data": {
+            "id": "$1",
+            "type": "fos-confirmable-actions",
+            "attributes": {
+                "kind": "lib:billpayment",
+                "flow": "embedded"
+            },
+            "relationships": {
+                "user": {
+                    "data": {
+                        "id": "$2",
+                        "type": "fos-users"
+                    }
+                },
+                "client": {
+                    "data": {
+                        "id": "$4",
+                        "type": "fos-clients"
+                    }
+                }
+            },
+            "links": {
+                "redirect": "https:abc.com/actions/redirect",
+                "cancellationRedirect": "https:abc.com/actions/cancellationRedirect",
+                "callback": "$3"
+            },
+            "meta": {
+                "allow_userless": true
+            }
+        }
+    }
+    </format>
+    <args>
+        <arg expression="get-property('referenceNo')"/>
+        <arg expression="get-property('DbsUserId')"/>
+        <arg expression="get-property('callbackUrl')"/>
+               <arg expression="get-property('azp')"/>
+    </args>
+</payloadFactory>
+
+<log level="full"/>
+<!-- Step 1: Set the reference number into a uri.var -->
+<property name="uri.var.userId" expression="get-property('userId')" scope="default"/>
+
+    <property name="uri.var.ReferenceNumber" expression="get-property('referenceNo')"/>
+
+
+<!-- Step 2: Use it in the address URI -->
+<log  level="full"/>
+<property name="Accept" value="application/json" scope="transport"/>
+<property name="messageType" value="application/json" scope="axis2"/>
+<property name="Content-Type" value="application/json" scope="transport"/>
+
+<!-- <call>
+    <endpoint>
+        <http method="put" uri-template="https://api.uat.anbesabank.et/dbs/foundation/confirmables/v1/actions/{uri.var.ReferenceNumber}"/>
+    </endpoint>
+</call> -->
+<call>
+    <endpoint key="confirmableActionEP"/>
+</call>
+
+<log  level="full"/>
+
+<log level="custom">
+    <property name="HTTP_SC_default" expression="get-property('HTTP_SC')" />
+    <property name="HTTP_SC_axis2" expression="get-property('axis2','HTTP_SC')" />
+    <property name="HTTP_SC_transport" expression="get-property('transport','HTTP_SC')" />
+</log>
+
+<property name="confirmableReason" value="Confirmable api error" scope="default"/>
+
+
+<property name="HTTP_SC_axis2" expression="get-property('axis2','HTTP_SC')" />
+<log level="full"/>
+<filter xpath="contains(get-property('HTTP_SC_axis2'), '2')">
+    <then>
+        <dbreport>
+            <connection>
+                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+            </connection>
+            <statement>
+                <sql>
+                  UPDATE public."awachtransfer" 
+SET "confirmableStatus" = 'success',
+    "tokenStatus" = 'Generated'
+WHERE "ReferenceNo" = ?
+          </sql>
+                <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+        <!-- <payloadFactory media-type="json">
+            <format>{"status":"SUCCESS","referenceNo":"$1"}</format>
+            <args><arg expression="get-property('referenceNo')"/></args>
+        </payloadFactory> -->
+    </then>
+    <else>
+        <dbreport>
+            <connection>
+                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+            </connection>
+            <statement>
+                <sql>
+                  UPDATE public."awachtransfer" 
+SET "confirmableStatus" = 'fail',
+    "tokenStatus" = 'Generated'
+WHERE "ReferenceNo" = ?
+
+                </sql>
+                <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+        <!-- <payloadFactory media-type="json">
+            <format>{"status":"FAILURE","message":"$1"}</format>
+            <args><arg expression="get-property('confirmableReason')"/></args>
+        </payloadFactory> -->
+    </else>
+</filter>
+
+<respond/>
+      
+        </else>
+    </filter>
+
+
+
+
+
+<dbreport>
+    <connection>
+        <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+    </connection>
+    <statement>
+        <sql>
+            INSERT INTO public."awachtransfer" (
+                 "RequestId", 
+                "Amount", "DAccountNo", "CAccountNo", "DAccountBranch", "CAccountName", 
+                "TransferDate", "ResponseStatus", "ErrorReason", "IsSuccessful", "OrderId", "ReferenceNo", 
+                 "DbsUserId", "updatedBy", "approvedBy", "requestedBy", 
+                "DAccountName"
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?);
+        </sql>
+
+
+        <parameter expression="get-property('RequestId')" type="VARCHAR"/>
+            <parameter expression="get-property('Amount')" type="DECIMAL"/>
+        <parameter expression="get-property('DAccountNo')" type="VARCHAR"/>
+        <parameter expression="get-property('CAccountNo')" type="VARCHAR"/>
+        <parameter expression="get-property('branch')" type="VARCHAR"/>
+        <parameter expression="get-property('CAccountName')" type="VARCHAR"/>
+  <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+        <parameter expression="get-property('ResponseStatus')" type="VARCHAR"/>
+        <parameter expression="get-property('ErrorReason')" type="VARCHAR"/>
+      
+        <parameter expression="get-property('IsSuccessful')" type="BIT"/>
+        <parameter expression="get-property('OrderId')" type="VARCHAR"/>
+        <parameter expression="get-property('ReferenceNo')" type="VARCHAR"/>
+                <parameter expression="get-property('DbsUserId')" type="VARCHAR"/>
+        <parameter expression="get-property('updatedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('approvedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('requestedBy')" type="VARCHAR"/>
+        <parameter expression="get-property('accountHolderName')" type="VARCHAR"/>
+    </statement>
+</dbreport>
+
+
+
+</sequence>

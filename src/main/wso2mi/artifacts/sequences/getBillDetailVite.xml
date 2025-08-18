@@ -1,0 +1,288 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="getBillDetailVite" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+    <!-- Start -->
+    <log level="custom">
+        <property name="STEP" value="STARTING getBillDetailVite sequence" />
+    </log>
+
+    <!-- Generate current date -->
+    <script language="js">
+        var currentDate = new Date();
+        var formattedDate = currentDate.toISOString().split('T')[0] + " " + currentDate.toTimeString().split(' ')[0];
+        mc.setProperty('currentDate', formattedDate);
+    </script>
+    <log level="custom">
+        <property name="INFO" value="Generated currentDate = {get-property('currentDate')}" />
+    </log>
+
+    <!-- Extract incoming payload properties -->
+    <property name="phoneNumber" expression="json-eval($.phoneNumber)" scope="default"/>
+    <property name="billerType" expression="json-eval($.billerType)" scope="default"/>
+    <property name="billcode" expression="json-eval($.uniqueCode)" scope="default"/>
+    <property name="referenceNo" expression="json-eval($.referenceNo)" scope="default"/>
+    <property name="accountNo" expression="json-eval($.accountNo)" scope="default"/>
+    <property name="providerId" expression="json-eval($.providerId)" scope="default"/>
+    <property name="uniqueCode" expression="json-eval($.uniqueCode)" scope="default"/>
+    <log level="custom">
+        <property name="ExtractedProperties" value="phoneNumber={get-property('phoneNumber')}, billerType={get-property('billerType')}, billcode={get-property('billcode')}, referenceNo={get-property('referenceNo')}, accountNo={get-property('accountNo')}, providerId={get-property('providerId')}" />
+     <property name="uniqueCode" expression="json-eval($.uniqueCode)" scope="default"/>
+  
+    </log>
+<log level="custom">
+    <property name="DEBUG_uniqueCode" expression="get-property('uniqueCode')" />
+</log>
+    <property name="InvoiceId" expression="get-property('uniqueCode')" />
+
+<log level="custom">
+    <property name="BEFORE_DBLOOKUP_uniqueCode" expression="get-property('uniqueCode')" />
+    <property name="BEFORE_DBLOOKUP_InvoiceId" expression="get-property('InvoiceId')" />
+</log>
+
+    <!-- First check ECPaymentRecords table by InvoiceId (uniqueCode) and status -->
+<dblookup>
+    <connection>
+        <pool>
+            <dsName>jdbc/DbsBillPaymentDB</dsName>
+        </pool>
+    </connection>
+    <statement>
+        <sql>
+            SELECT COUNT(*) AS cnt
+            FROM public."ECPaymentRecords"
+            WHERE "InvoiceId" = ? AND LOWER("Status") = LOWER(?)
+        </sql>
+        <parameter expression="get-property('uniqueCode')" type="VARCHAR"/>
+        <parameter value="success" type="VARCHAR"/>
+        <result name="cnt" column="cnt"/>
+    </statement>
+    
+</dblookup>
+    <property name="RowCount" expression="get-property('cnt')" />
+<log level="custom">
+    <property name="DEBUG_InvoiceId" expression="get-property('InvoiceId')" />
+
+</log>
+
+<log level="custom">
+    <property name="RowCount" expression="get-property('cnt')" />
+</log>
+
+    <log level="custom">
+        <property name="STEP" value="Checked ECPaymentRecords for existing successful payment" />
+       <property name="paymentRecordCount" expression="count(//jsonArray/jsonElement)" scope="default"/>
+    
+    </log>
+
+    <filter xpath="get-property('RowCount') &gt; 0">
+    <then>
+    <log level="custom">
+        <property name="STEP" value="Found existing successful payment record in ECPaymentRecords" />
+    </log>
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "status": "400",
+                "message": "Payment already processed successfully"
+            }
+        </format>
+    </payloadFactory>
+    <property name="HTTP_SC" value="400" scope="axis2"/>
+    <respond/>
+</then>
+
+        <else>
+            <log level="custom">
+                <property name="STEP" value="No existing successful payment record found, proceeding with bill detail retrieval" />
+            </log>
+
+            <!-- Build JSON payload for API call -->
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "billerType": "$1",
+                        "billcode": "$2"
+                    }
+                </format>
+                <args>
+                    <arg expression="get-property('billerType')"/>
+                    <arg expression="get-property('billcode')"/>
+                </args>
+            </payloadFactory>
+            <header name="Content-Type" value="application/json" scope="transport"/>
+            <header name="mob_token" value="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuI6Sn1iDQMk85y8b6i7R2C9T8AenuVeOwPNvma9pK6uO1iWgUIItSFW" scope="transport"/>
+
+            <log level="custom">
+                <property name="PayloadForAPI" expression="get-property('payload')" />
+            </log>
+
+            <!-- Call external API -->
+            <!-- <call>
+                <endpoint>
+                    <address uri="http://10.1.8.45:7070/api/transactions/EXT_P/query_bills"/>
+                </endpoint>
+            </call> -->
+            <call>
+    <endpoint key="queryBillsEP"/>
+</call>
+
+                              <log level="full"/>
+
+            <!-- Handle API response -->
+            <script language="js">
+                // Get the full response as JSON object
+                var response = mc.getPayloadJSON();
+                
+                // Check if response is empty array
+                if (response.length === 0 || response.status == "1"|| response.error == true) {
+                    mc.setPayloadJSON({
+                        "status": "error",
+                        "code": "404",
+                        "message": "No bill details found for the provided criteria"
+                    });
+                } else {
+                    // Extract the first item from the array
+                    var firstItem = response[0];
+
+                    // Set properties for later use
+                    mc.setProperty("ResProviderId", firstItem.providerId);
+                    var uniqueCode = mc.getProperty("uniqueCode");
+                    mc.setProperty("InvoiceId", uniqueCode);
+                    mc.setProperty("InvoiceIdentificationValue", firstItem.invoiceIdentificationValue);
+                    mc.setProperty("InvoiceAmount", firstItem.invoiceAmount);
+                    mc.setProperty("CurrencyAlphaCode", firstItem.currencyAlphaCode);
+                    mc.setProperty("CurrencyDesignation", firstItem.currencyDesignation);
+                    mc.setProperty("CustomerName", firstItem.customerName);
+                    mc.setProperty("ProviderName", firstItem.providerName);
+                    mc.setProperty("firstItemStatus", firstItem.status);
+                    
+                    // Replace the payload with only the first object
+                    mc.setPayloadJSON(firstItem);
+                }
+            </script>
+
+            <!-- Check if API returned empty response -->
+            <filter source="json-eval($.status)" regex="error">
+                <then>
+                    <log level="custom">
+                        <property name="STEP" value="No bill details found in API response" />
+                    </log>
+                    <property name="HTTP_SC" value="404" scope="axis2"/>
+                    <respond/>
+                </then>
+                <else>
+                    <!-- Process successful response -->
+                    <payloadFactory media-type="json">
+                        <format>
+                           [{
+                                "status": "$1",
+                                "providerId": "$2",
+                                "invoiceId": "$3",
+                                "customerCode": "$3",
+                                "invoiceIdentificationValue": "$4",
+                                "invoiceAmount": $5,
+                                "currencyAlphaCode": "$6",
+                                "currencyDesignation": "$7",
+                                "customerName": "$8",
+                                "providerName": "$9"
+                            }] 
+                        </format>
+                        <args>
+                            <arg expression="get-property('firstItemStatus')"/>
+                            <arg expression="get-property('ResProviderId')"/>
+                            <arg expression="get-property('uniqueCode')"/>
+                            <arg expression="get-property('InvoiceIdentificationValue')"/>
+                            <arg expression="get-property('InvoiceAmount')"/>
+                            <arg expression="get-property('CurrencyAlphaCode')"/>
+                            <arg expression="get-property('CurrencyDesignation')"/>
+                            <arg expression="get-property('CustomerName')"/>
+                            <arg expression="get-property('ProviderName')"/>
+                        </args>
+                    </payloadFactory>
+
+                    <log level="custom">
+                        <property name="STEP" value="API response received" />
+                    </log>
+                    <log level="full"/>
+
+                    <!-- Default status -->
+                    <property name="status" value="success" scope="default"/>
+                    <property name="responseError" value="false" scope="default"/>
+
+                    <!-- Extract API response -->
+                    <property name="ResProviderId" expression="json-eval($[0].providerId)" scope="default"/>
+                    <property name="InvoiceId" expression="json-eval($[0].invoiceId)" scope="default"/>
+                    <property name="InvoiceIdentificationValue" expression="json-eval($[0].invoiceIdentificationValue)" scope="default"/>
+                    <property name="InvoiceAmount" expression="json-eval($[0].invoiceAmount)" scope="default"/>
+                    <property name="CurrencyAlphaCode" expression="json-eval($[0].currencyAlphaCode)" scope="default"/>
+                    <property name="CurrencyDesignation" expression="json-eval($[0].currencyDesignation)" scope="default"/>
+                    <property name="CustomerName" expression="json-eval($[0].customerName)" scope="default"/>
+                    <property name="ProviderName" expression="json-eval($[0].providerName)" scope="default"/>
+
+                    <log level="custom">
+                        <property name="ExtractedResponseFields" value="ResProviderId={get-property('ResProviderId')}, InvoiceId={get-property('InvoiceId')}, InvoiceAmount={get-property('InvoiceAmount')}, CustomerName={get-property('CustomerName')}" />
+                    </log>
+
+                    <!-- Insert into DB -->
+                    <log level="custom">
+                        <property name="STEP" value="Preparing to insert data into DB" />
+                    </log>
+                    <log level="custom">
+                        <property name="DBParameters" value="ResTransactionDate={get-property('currentDate')}, Status={get-property('status')}, ResponseError={get-property('responseError')}, ResProviderId={get-property('ResProviderId')}, InvoiceId={get-property('InvoiceId')}, InvoiceAmount={get-property('InvoiceAmount')}" />
+                    </log>
+
+                    <dbreport>
+                        <connection>
+                            <pool>
+                                <dsName>jdbc/DbsBillPaymentDB</dsName>
+                            </pool>
+                        </connection>
+                        <statement>
+                            <sql>
+                                INSERT INTO public."BillGetRequests" (
+                                    "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
+                                    "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError",
+                                    "ResProviderId", "InvoiceId", "InvoiceIdentificationValue", "InvoiceAmount",
+                                    "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName"
+                                )
+                                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','),
+                                    string_to_array(CAST(? AS TEXT), ',')::numeric[]
+                                , string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','))
+                            </sql>
+                            <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                            <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                            <parameter expression="get-property('providerId')" type="VARCHAR"/>
+                            <parameter expression="get-property('uniqueCode')" type="VARCHAR"/>
+                            <parameter expression="get-property('phoneNumber')" type="VARCHAR"/>
+                            <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                            <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
+                            <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                            <parameter expression="get-property('status')" type="VARCHAR"/>
+                            <parameter expression="get-property('responseError')" type="VARCHAR"/>
+                            <parameter expression="get-property('ResProviderId')" type="VARCHAR"/>
+                            <parameter expression="get-property('InvoiceId')" type="VARCHAR"/>
+                            <parameter expression="get-property('InvoiceIdentificationValue')" type="VARCHAR"/>
+                            <parameter expression="get-property('InvoiceAmount')" type="DECIMAL"/>
+                            <parameter expression="get-property('CurrencyAlphaCode')" type="VARCHAR"/>
+                            <parameter expression="get-property('CurrencyDesignation')" type="VARCHAR"/>
+                            <parameter expression="get-property('CustomerName')" type="VARCHAR"/>
+                            <parameter expression="get-property('ProviderName')" type="VARCHAR"/>
+                        </statement>
+                    </dbreport>
+
+                    <log level="custom">
+                        <property name="STEP" value="Database insert completed successfully" />
+                    </log>
+
+                    <!-- Respond -->
+                    <respond/>
+                </else>
+            </filter>
+        </else>
+    </filter>
+
+    <log level="custom">
+        <property name="STEP" value="END of getBillDetailVite sequence" />
+    </log>
+
+</sequence>

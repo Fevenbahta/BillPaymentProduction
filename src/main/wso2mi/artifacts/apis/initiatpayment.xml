@@ -1,0 +1,154 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<api context="/initiatebillpayment" name="initiatebillpayment" xmlns="http://ws.apache.org/ns/synapse">
+    <resource methods="POST" uri-template="/">
+        <inSequence>
+                
+    <script language="js">
+        var payload = mc.getPayloadJSON();
+
+        var billerType = payload.billerType;
+        
+    
+
+
+        // Validation logic: Ensure required fields are present and valid
+        var missingFields = [];
+        
+     
+        // Check for other required fields
+        if (!billerType) {
+            missingFields.push("billerType");
+        }
+       
+       
+
+        // If any fields are missing, set error response
+        if (missingFields.length > 0) {
+            mc.setProperty("errorCode", "400");
+            var errorMessage = "The following fields are missing or invalid: " + missingFields.join(", ");
+            mc.setProperty("errorMessage", errorMessage);
+
+            // Create a dynamic error message based on missing fields
+            var errorResponse = {
+                "returnCode": "ERROR",
+                "ticketId": "247f4b-5d7b-4d32-a1db-f893edaa38a7", // You can generate or assign dynamically if needed
+                "traceId": "92e9013d25cca084", // You can generate or assign dynamically if needed
+                "feedbacks": [
+                    {
+                        "code": "SB_DS_001",  // Error code (define as per your system)
+                        "label": "Validation failed",  // Error description
+                        "severity": "ERROR",  // Severity of the error
+                        "type": "BUS",  // Business error type
+                        "source": "validateBillGetPayload",  // The sequence or resource that caused the error
+                        "origin": "WSO2-MI",  // Origin of the error
+                        "spanId": "92e9013d",  // Trace information if available
+                        "parameters": [
+                            {
+                                "code": "0",  // Parameter code
+                                "value": "Missing or invalid field(s): " + missingFields.join(", ") // Dynamic message based on missing fields
+                            }
+                        ]
+                    }
+                ],
+                      };
+
+            mc.setPayloadJSON(errorResponse);  // Set the error response
+
+            // Now, use the Respond mediator to terminate the flow
+            mc.setProperty("terminateFlow", "true");  // Flag to stop further processing
+        } else {
+                          }
+    </script>
+
+
+ <switch source="get-property('terminateFlow')">
+    <case regex="true">
+          <property name="HTTP_SC" value="400" scope="axis2" type="INTEGER"/>
+   
+        <!-- Log when the flow is terminated due to validation failure -->
+        <log level="custom">
+            <property name="Info" value="Validation failed, terminating flow."/>
+        </log>
+        <!-- Stop the flow if validation fails -->
+        <respond/>
+    </case>
+    <default></default></switch>
+
+<property name="billerType" expression="json-eval($.billerType)" scope="default"/>
+
+
+<log level="custom">
+    <property name="BillerType (from property)" expression="get-property('billerType')"/>
+</log>
+<!-- First check for AWACH -->
+<filter source="get-property('billerType')" regex="awach">
+    <then>
+        <log level="custom">
+            <property name="Routing" value="billerType matched: AWACH — invoking initiateAwachPayment"/>
+        </log>
+        <sequence key="initiateAwachPayment"/>
+    </then>
+    <else>
+        <!-- Then check for ET -->
+        <filter source="get-property('billerType')" regex="ET">
+            <then>
+                <log level="custom">
+                    <property name="Routing" value="billerType matched: ET — invoking initiateEtSequence"/>
+                </log>
+                <sequence key="initiateEtSequence"/>
+            </then>
+            <else>
+                <log level="custom">
+                    <property name="Routing"
+                        expression="fn:concat('billerType not ET/AWACH — invoking initiateECPayment: ', get-property('billerType'))"/>
+                </log>
+                <sequence key="initiateECPayment"/>
+            </else>
+        </filter>
+    </else>
+</filter>
+
+
+    
+        </inSequence>
+        
+        <!-- Add fault sequence at API level -->
+        <faultSequence>
+            <!-- Log the full error details -->
+            <log level="custom" separator=",">
+                <property name="ERROR" value="API Fault Sequence Triggered"/>
+                <property name="ERROR_CODE" expression="get-property('ERROR_CODE')"/>
+                <property name="ERROR_MESSAGE" expression="get-property('ERROR_MESSAGE')"/>
+                <property name="ERROR_DETAIL" expression="get-property('ERROR_DETAIL')"/>
+            </log>
+            
+            <!-- Check for specific error conditions -->
+            <filter xpath="get-property('ERROR_CODE') = '404'">
+                <then>
+                    <payloadFactory media-type="json">
+                        <format>{"status": "error", "message": "Resource not found"}</format>
+                        <args/>
+                    </payloadFactory>
+                    <property name="HTTP_SC" value="404" scope="axis2"/>
+                </then>
+                <else>
+                    <payloadFactory media-type="json">
+                        <format>{"status": "error", "message": "$1", "code": "$2"}</format>
+                        <args>
+                            <arg expression="get-property('ERROR_MESSAGE')"/>
+                            <arg expression="get-property('ERROR_CODE')"/>
+                        </args>
+                    </payloadFactory>
+                    <property name="HTTP_SC" value="500" scope="axis2"/>
+                </else>
+            </filter>
+            
+            <!-- Set proper content type -->
+            <property name="messageType" value="application/json" scope="axis2"/>
+            <property name="ContentType" value="application/json" scope="axis2"/>
+            
+            <!-- Send error response -->
+            <respond/>
+        </faultSequence>
+    </resource>
+</api>

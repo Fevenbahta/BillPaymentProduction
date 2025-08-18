@@ -1,0 +1,379 @@
+<sequence name="initiateECPayment" xmlns="http://ws.apache.org/ns/synapse">
+    <log level="custom">
+        <property name="message" value="Saving EC Payment Request"/>
+    </log>
+
+    <!-- Extract and validate payload -->
+    <property name="payload" expression="json-eval($)" scope="default" type="STRING"/>
+<script language="js">
+<![CDATA[
+    var p = JSON.parse(mc.getProperty("payload"));
+
+    var missing = [];
+
+    // Always check for these fields
+    if (!p.billerType) missing.push("billerType");
+    if (!p.invoiceId) missing.push("invoiceId");
+    if (!p.customerId) missing.push("customerId");
+    if (!p.reason) missing.push("reason");
+    if (!p.paymentAmount) missing.push("paymentAmount");
+    if (!p.branch) missing.push("branch");
+    if (!p.accountNo) missing.push("accountNo");
+    if (!p.providerId) missing.push("providerId");
+    if (!p.dbsUserId) missing.push("dbsUserId");
+    if (!p.referenceNo) missing.push("referenceNo");
+    
+    // Conditionally require phoneNo if billerType is TOPUP
+  if (p.billerType && p.billerType.toUpperCase() === "TOPUP") {
+        if (!p.phoneNo) {
+            missing.push("phoneNo");
+        }
+        // Validate amount
+        if (parseFloat(p.paymentAmount) < 1) {
+            mc.setProperty("ERROR_MESSAGE", "Payment amount must be at least 1 for TOPUP biller type.");
+            mc.setProperty("ERROR_CODE", "400");
+            // exit early
+            throw "Validation failed: amount too low for TOPUP";
+        }
+    }
+    if (missing.length > 0) {
+        mc.setProperty("ERROR_MESSAGE", "Missing: " + missing.join(", "));
+        mc.setProperty("ERROR_CODE", "400");
+    } else {
+        mc.setProperty("billerType", p.billerType);
+        mc.setProperty("userId", p.dbsUserId);
+        mc.setProperty("customerCode", p.customerCode);
+        mc.setProperty("invoiceId", p.invoiceId);
+        mc.setProperty("customerId", p.customerId);
+        mc.setProperty("reason", p.reason);
+        mc.setProperty("paymentAmount", p.paymentAmount);
+        mc.setProperty("branch", p.branch);
+        mc.setProperty("accountNo", p.accountNo);
+        mc.setProperty("providerId", p.providerId);
+
+        mc.setProperty("providerId", p.providerId);
+        mc.setProperty("dbsReferenceNo", p.referenceNo);
+        // Optionally set phoneNo if available
+        if (p.phoneNo) {
+            mc.setProperty("phoneNo", p.phoneNo);
+        }
+    }
+]]>
+</script>
+
+
+
+   <property name="userId" expression="json-eval($.dbsUserId)" scope="default" type="STRING"/>
+<log level="custom">
+    <property name="userId" expression="get-property('userId')"/>
+</log>
+ <sequence key="decodeAndValidateTokenSeq"/>
+
+
+  <!-- Get referenceNo from request -->
+ 
+<script language="js"><![CDATA[
+   var uuid = java.util.UUID.randomUUID().toString();
+   mc.setProperty("referenceNo", uuid);
+]]></script>
+<log level="custom"><property name="Generated ReferenceNo" expression="get-property('referenceNo')"/></log>
+
+
+
+
+
+<dblookup>
+    <connection>
+        <pool>
+            <dsName>jdbc/DbsBillPaymentDB</dsName>
+        </pool>
+    </connection>
+    <statement>
+        <sql>
+            SELECT COUNT(*) AS cnt
+            FROM public."ECPaymentRecords"
+            WHERE "InvoiceId" = ? AND LOWER("Status") = LOWER(?)
+        </sql>
+        <parameter expression="get-property('invoiceId')" type="VARCHAR"/>
+        <parameter value="success" type="VARCHAR"/>
+        <result name="cnt" column="cnt"/>
+    </statement>
+    
+</dblookup>
+    <property name="RowCount" expression="get-property('cnt')" />
+<log level="custom">
+    <property name="DEBUG_InvoiceId" expression="get-property('InvoiceId')" />
+
+</log>
+
+<log level="custom">
+    <property name="RowCount" expression="get-property('cnt')" />
+</log>
+
+    <log level="custom">
+        <property name="STEP" value="Checked ECPaymentRecords for existing successful payment" />
+       <property name="paymentRecordCount" expression="count(//jsonArray/jsonElement)" scope="default"/>
+    
+    </log>
+
+    <filter xpath="get-property('RowCount') &gt; 0">
+        <then>
+    <log level="custom">
+        <property name="STEP" value="Found existing successful payment record in ECPaymentRecords" />
+    </log>
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "status": "400",
+                "message": "Payment already processed successfully"
+            }
+        </format>
+    </payloadFactory>
+    <property name="HTTP_SC" value="400" scope="axis2"/>
+    <respond/>
+</then>
+        <else>
+            <log level="custom">
+                <property name="STEP" value="No existing successful payment record found" />
+            </log>      
+            </else></filter>
+
+    <!-- Check for validation errors -->
+    <filter xpath="get-property('ERROR_CODE')">
+        <then>
+            <payloadFactory media-type="json">
+                <format>
+                    {"status":"ERROR","message":"$1"}
+                </format>
+                <args>
+                    <arg expression="get-property('ERROR_MESSAGE')"/>
+                </args>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </then>
+        <else>
+            <!-- Save the request in DB -->
+            <dbreport>
+                <connection>
+                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                </connection>
+                <statement>
+                    <sql>
+                        INSERT INTO public."ECPaymentRecords" (
+                            "BillerType", "CustomerCode", "InvoiceId", "ReferenceNo", "CustomerId",
+                            "Reason", "PaymentAmount", "PaymentDate", "Branch", "Currency",
+                            "AccountNo", "ProviderId", "Status", "dbsUserId","phoneNo","dbsReferenceNo"
+                        ) VALUES (?, ?, ?, ?, ?, ?, ?, now(), ?, ?, ?, ?, ?,?,?,?)
+                    </sql>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                    <parameter expression="get-property('customerCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('invoiceId')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('customerId')" type="VARCHAR"/>
+                    <parameter expression="get-property('reason')" type="VARCHAR"/>
+                    <parameter expression="get-property('paymentAmount')" type="DECIMAL"/>
+                    <parameter expression="get-property('branch')" type="VARCHAR"/>
+                    <parameter value="001" type="VARCHAR"/>
+                    <parameter expression="get-property('accountNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('providerId')" type="VARCHAR"/>
+             
+                    <parameter value="pending" type="VARCHAR"/>
+                    <parameter expression="get-property('userId')" type="VARCHAR"/>
+                         <parameter expression="get-property('phoneNo')" type="VARCHAR"/>
+                    <parameter expression="get-property('dbsReferenceNo')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+
+            <!-- <payloadFactory media-type="json">
+                <format>
+                    {"status":"PENDING","referenceNo":"$1"}
+                </format>
+                <args>
+                    <arg expression="get-property('referenceNo')"/>
+                </args>
+            </payloadFactory> -->
+
+
+
+
+
+    <log level="custom">
+        <property name="INFO" value="Calling GetAccessTokenSequence"/>
+    </log>
+
+    <!-- Call the token sequence -->
+
+              <sequence key="ClientCredentialsTokenSequence"/> 
+
+
+                  <!-- <property name="clientId" value="service-dbs-confirmables" scope="default"/>
+<property name="clientSecret" value="4fd191f816f872d539e7da803db59617" scope="default"/>
+<property name="grantType" value="client_credentials" scope="default"/>
+
+ <header name="Content-Type" action="set" scope="transport" value="application/x-www-form-urlencoded"/>
+    <payloadFactory media-type="text" template-type="default">
+        <format>{
+            "grant_type":"client_credentials"}</format>
+        <args>
+        </args>
+    </payloadFactory>
+
+<call>
+    <endpoint>
+         <http method="POST" uri-template="https://idp.uat.anbesabank.et/auth/realms/neo-customer/protocol/openid-connect/token"
+            />
+    </endpoint>
+</call>
+
+<log level="full"/>
+
+<property name="accessToken" expression="json-eval($.access_token)" scope="default"/>
+<log level="custom"><property name="OAuthAccessToken" expression="get-property('accessToken')"/></log> -->
+
+
+<log level="custom">
+
+    <property name="accessTokensecond" expression="get-property('accessToken')"/>
+    
+    <property name="id" expression="get-property('id')"/>
+</log>
+
+<property name="callbackUrl" expression="fn:concat('https://api-in.anbesabank.et/billpayment/v3/billcallback/', get-property('referenceNo'))" scope="default" type="STRING"/>
+
+<property name="Authorization" expression="fn:concat('Bearer ', get-property('accessToken'))" scope="transport"/>
+<property name="Content-Type" value="application/json" scope="transport"/>
+<log level="custom">
+    <property name="referenceNo" expression="get-property('referenceNo')"/>
+    <property name="userId" expression="get-property('userId')"/>
+    <property name="callbackUrl" expression="get-property('callbackUrl')"/>
+    <property name="accessToken" expression="get-property('accessToken')"/>
+</log>
+  
+<payloadFactory media-type="json">
+    <format>{
+        "uuid": "$1",
+        "data": {
+            "id": "$1",
+            "type": "fos-confirmable-actions",
+            "attributes": {
+                "kind": "lib:billpayment",
+                "flow": "embedded"
+            },
+            "relationships": {
+                "user": {
+                    "data": {
+                        "id": "$2",
+                        "type": "fos-users"
+                    }
+                },
+                "client": {
+                    "data": {
+                        "id": "$4",
+                        "type": "fos-clients"
+                    }
+                }
+            },
+            "links": {
+                "redirect": "https:abc.com/actions/redirect",
+                "cancellationRedirect": "https:abc.com/actions/cancellationRedirect",
+                "callback": "$3"
+            },
+            "meta": {
+                "allow_userless": true
+            }
+        }
+    }
+    </format>
+    <args>
+        <arg expression="get-property('referenceNo')"/>
+        <arg expression="get-property('userId')"/>
+        <arg expression="get-property('callbackUrl')"/>
+        <arg expression="get-property('azp')"/>
+    </args>
+</payloadFactory>
+
+<log level="full"/>
+<!-- Step 1: Set the reference number into a uri.var -->
+<property name="uri.var.userId" expression="get-property('userId')" scope="default"/>
+
+    <property name="uri.var.ReferenceNumber" expression="get-property('referenceNo')"/>
+
+
+<!-- Step 2: Use it in the address URI -->
+<log  level="full"/>
+<property name="Accept" value="application/json" scope="transport"/>
+<property name="messageType" value="application/json" scope="axis2"/>
+<property name="Content-Type" value="application/json" scope="transport"/>
+
+<!-- <call>
+    <endpoint>
+        <http method="put" uri-template="https://api.uat.anbesabank.et/dbs/foundation/confirmables/v1/actions/{uri.var.ReferenceNumber}"/>
+    </endpoint>
+</call> -->
+<call>
+    <endpoint key="confirmableActionEP"/>
+</call>
+
+<log  level="full"/>
+
+<log level="custom">
+    <property name="HTTP_SC_default" expression="get-property('HTTP_SC')" />
+    <property name="HTTP_SC_axis2" expression="get-property('axis2','HTTP_SC')" />
+    <property name="HTTP_SC_transport" expression="get-property('transport','HTTP_SC')" />
+</log>
+
+<property name="confirmableReason" value="Confirmable api error" scope="default"/>
+
+
+<property name="HTTP_SC_axis2" expression="get-property('axis2','HTTP_SC')" />
+
+<filter xpath="contains(get-property('HTTP_SC_axis2'), '2')">
+    <then>
+        <dbreport>
+            <connection>
+                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+            </connection>
+            <statement>
+                <sql>
+                  UPDATE public."ECPaymentRecords" 
+SET "confirmableStatus" = 'success',
+    "tokenStatus" = 'Generated'
+WHERE "ReferenceNo" = ?
+          </sql>
+                <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+        <!-- <payloadFactory media-type="json">
+            <format>{"status":"SUCCESS","referenceNo":"$1"}</format>
+            <args><arg expression="get-property('referenceNo')"/></args>
+        </payloadFactory> -->
+    </then>
+    <else>
+        <dbreport>
+            <connection>
+                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+            </connection>
+            <statement>
+                <sql>
+                  UPDATE public."ECPaymentRecords" 
+SET "confirmableStatus" = 'fail',
+    "tokenStatus" = 'Generated'
+WHERE "ReferenceNo" = ?
+
+                </sql>
+                <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+            </statement>
+        </dbreport>
+        <!-- <payloadFactory media-type="json">
+            <format>{"status":"FAILURE","message":"$1"}</format>
+            <args><arg expression="get-property('confirmableReason')"/></args>
+        </payloadFactory> -->
+    </else>
+</filter>
+
+<respond/>
+      
+        </else>
+    </filter>
+</sequence>

@@ -1,0 +1,311 @@
+<sequence name="make_payment_sequence" xmlns="http://ws.apache.org/ns/synapse">
+
+    <!-- STEP 1: Start of Payment Sequence -->
+    <log level="custom">
+        <property name="Step" value="START: make_payment_sequence"/>
+    </log>
+
+    <!-- STEP 2: Build Payment Payload -->
+    <log level="custom">
+        <property name="Step" value="Building Payment Payload"/>
+    </log>
+
+<dblookup>
+    <connection>
+        <pool>
+            <dsName>jdbc/DbsBillPaymentDB</dsName>
+        </pool>
+    </connection>
+    <statement>
+        <sql>
+            SELECT COUNT(*) AS cnt
+            FROM public."ECPaymentRecords"
+            WHERE "InvoiceId" = ? AND LOWER("Status") = LOWER(?)
+        </sql>
+        <parameter expression="get-property('invoiceId')" type="VARCHAR"/>
+        <parameter value="success" type="VARCHAR"/>
+        <result name="cnt" column="cnt"/>
+    </statement>
+    
+</dblookup>
+    <property name="RowCount" expression="get-property('cnt')" />
+<log level="custom">
+    <property name="DEBUG_InvoiceId" expression="get-property('InvoiceId')" />
+
+</log>
+
+<log level="custom">
+    <property name="RowCount" expression="get-property('cnt')" />
+</log>
+
+    <log level="custom">
+        <property name="STEP" value="Checked ECPaymentRecords for existing successful payment" />
+       <property name="paymentRecordCount" expression="count(//jsonArray/jsonElement)" scope="default"/>
+    
+    </log>
+
+    <filter xpath="get-property('RowCount') &gt; 0">
+          <then>
+    <log level="custom">
+        <property name="STEP" value="Found existing successful payment record in ECPaymentRecords" />
+    </log>
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "status": "400",
+                "message": "Payment already processed successfully"
+            }
+        </format>
+    </payloadFactory>
+    <property name="HTTP_SC" value="400" scope="axis2"/>
+    <respond/>
+</then>
+        <else>
+            <log level="custom">
+                <property name="STEP" value="No existing successful payment record found" />
+            </log>      
+            </else></filter>
+
+
+
+
+    <payloadFactory media-type="json">
+        <format>
+            {
+                "billerType": "$1",
+                "invoiceId": "$2",
+                "providerId": "$3",
+                "paymentAmount": "$4",
+                "accountNo": "$5",
+                "reason": "$6",
+                "branch": "$7"
+            }
+        </format>
+        <args>
+            <arg expression="get-property('billerType')"/>
+            <arg expression="get-property('invoiceId')"/>
+            <arg expression="get-property('providerId')"/>
+            <arg expression="get-property('paymentAmount')"/>
+            <arg expression="get-property('accountNo')"/>
+            <arg expression="get-property('reason')"/>
+            <arg expression="get-property('branch')"/>
+        </args>
+    </payloadFactory>
+
+    <property name="messageType" value="application/json" scope="axis2"/>
+    <log level="full" separator="Final Payment Request Payload:"/>
+
+    <!-- STEP 3: Set Headers -->
+    <log level="custom">
+        <property name="Step" value="Setting HTTP Headers"/>
+    </log>
+    <header name="Content-Type" value="application/json" scope="transport"/>
+    <header name="Accept" value="application/json" scope="transport"/>
+    <header name="mob_token" value="MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEAuI6Sn1iDQMk85y8b6i7R2C9T8AenuVeOwPNvma9pK6uO1iWgUIItSFW" scope="transport"/>
+
+    <!-- STEP 4: Call Payment API -->
+    <log level="custom">
+        <property name="Step" value="Calling External Payment API"/>
+    </log>
+    <property name="messageType" value="application/json" scope="axis2"/>
+<property name="RELAY_RESPONSE" value="true" scope="axis2"/>
+<header name="Accept" value="application/json" scope="transport"/>
+<property name="HTTP_METHOD" value="POST" scope="axis2"/>
+<property name="REST_URL_POSTFIX" value="" scope="axis2" type="STRING"/>
+
+<!-- <call>
+    <endpoint>
+        <address uri="http://10.1.8.45:7070/api/transactions/EXT_P/make_payment"/>
+    </endpoint>
+</call> -->
+<call>
+    <endpoint key="makePaymentBillEP"/>
+</call>
+
+
+    <!-- STEP 5: Log API Response -->
+    <log level="full" separator="Payment API Response:"/>
+    <property name="fullResponse" expression="json-eval($)" scope="default"/>
+    <property name="responseStatus" expression="json-eval($.status)" scope="default"/>
+    <property name="transactionId" expression="json-eval($.transactionId)" scope="default"/>
+    <property name="errorMessage" expression="json-eval($.message)" scope="default"/>
+
+    <!-- STEP 6: Check Response Status -->
+    <log level="custom">
+        <property name="Step" value="Checking Response Status"/>
+        <property name="ResponseStatus" expression="get-property('responseStatus')"/>
+    </log>
+
+    <filter xpath="get-property('responseStatus') = 'Accepted'">
+        <then>
+            <!-- STEP 7a: Update DB for Success -->
+            <log level="custom">
+                <property name="Step" value="Updating DB: SUCCESS"/>
+            </log>
+            <dbreport>
+                <connection>
+                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                </connection>
+                <statement>
+                    <sql>
+                        UPDATE public."ECPaymentRecords" 
+                        SET "Status" = 'success',
+                            "Response" = ?
+                        WHERE "ReferenceNo" = ?
+                    </sql>
+                    <parameter expression="get-property('fullResponse')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+
+            <!-- STEP 8a: Respond Success -->
+            <log level="custom">
+                <property name="Step" value="Responding with SUCCESS"/>
+            </log>
+        
+
+
+
+                           <payloadFactory media-type="json">
+            <format>
+                {
+                    "accountDebited": "$1",
+                    "accountCredited": "$2",
+                    "amount": "$3",
+                    "transactionId": "$4",
+                    "Fullname": "$5",
+                    "paymentType": "$6"
+                }
+            </format>
+            <args>
+                <arg expression="get-property('accountNo')" />
+                <arg expression="get-property('billerType')" />
+                <arg expression="get-property('paymentAmount')" />
+                <arg expression="get-property('dbsReferenceNo')" />
+                <arg expression="get-property('accountHolderName')" />
+                <arg expression="get-property('billerType')" />
+            </args>
+        </payloadFactory>
+        <log level="full"/>
+        <log>
+<property name="accountNo" expression="get-property('accountNo')" scope="default"/>
+<property name="providerId" expression="get-property('providerId')" scope="default"/>
+   <property name="paymentAmount" expression="get-property('paymentAmount')" scope="default"/>    
+<property name="dbsReferenceNo" expression="get-property('dbsReferenceNo')" scope="default"/> 
+<property name="accountHolderName" expression="get-property('accountHolderName')" scope="default"/>
+<property name="billerType" expression="get-property('billerType')" scope="default"/>
+  </log>
+
+        <!-- Set content-type header -->
+        <property name="Content-Type" value="application/json" scope="transport"/>
+
+        <!-- Call external receipt API -->
+        <!-- <call>
+            <endpoint>
+                <http uri-template="http://10.1.22.198:3060/generate-receipt" method="POST"/>
+            </endpoint>
+        </call> -->
+                 <call>
+    <endpoint key="generateBillReceiptEP"/>
+</call>
+
+        <!-- Optional: log response from receipt API -->
+        <log level="full">
+            <property name="AfterReceiptCall" expression="json-eval($.message)" />
+        </log>
+
+        <!-- Store receipt status -->
+        <property name="receiptStatus" expression="json-eval($.message)" scope="default" type="STRING" />
+
+                            <dbreport>
+                                <connection>
+                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                </connection>
+                                <statement>
+                                    <sql>
+                                       UPDATE public."ECPaymentRecords"
+SET 
+"ReceiptStatus" = ?
+WHERE "Id" = (
+  SELECT "Id"
+  FROM public."ECPaymentRecords"
+  WHERE "ReferenceNo" = ?
+  ORDER BY "Id" DESC
+  LIMIT 1
+)
+                                    </sql>
+                                    <parameter expression="get-property('id')" type="VARCHAR"/>
+                               <parameter expression="get-property('receiptStatus')" type="CHAR"/>
+                                </statement>
+                            </dbreport>
+
+   <payloadFactory media-type="json">
+    <format>
+        {
+            "data": {
+                "attributes": {
+                    "state": "completed"
+                },
+                "id": "$1"
+            }
+        }
+    </format>
+    <args>
+        <arg expression="get-property('id')"/>
+    </args>
+</payloadFactory>
+            <respond/>
+        </then>
+        <else>
+            <!-- STEP 7b: Update DB for Failure -->
+            <log level="custom">
+                <property name="Step" value="Updating DB: FAILED"/>
+                <property name="ErrorMessage" expression="get-property('errorMessage')"/>
+            </log>
+            <dbreport>
+                <connection>
+                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                </connection>
+                <statement>
+                    <sql>
+                        UPDATE public."ECPaymentRecords" 
+                        SET "Status" = 'FAILED',
+                            "ResponseError" = ?,
+                            "Response" = ?
+                        WHERE "ReferenceNo" = ?
+                    </sql>
+                    <parameter expression="get-property('errorMessage')" type="VARCHAR"/>
+                    <parameter expression="get-property('fullResponse')" type="VARCHAR"/>
+                    <parameter expression="get-property('referenceNo')" type="VARCHAR"/>
+                </statement>
+            </dbreport>
+
+            <!-- STEP 8b: Respond Failure -->
+            <log level="custom">
+                <property name="Step" value="Responding with FAILED"/>
+            </log>
+       <payloadFactory media-type="json">
+    <format>
+        {
+            "data": {
+                "attributes": {
+                    "state": "failed"
+                },
+                "id": "$1"
+            }
+        }
+    </format>
+    <args>
+        <arg expression="get-property('id')"/>
+    </args>
+</payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </else>
+    </filter>
+
+    <!-- STEP 9: End of Payment Sequence -->
+    <log level="custom">
+        <property name="Step" value="END: make_payment_sequence"/>
+    </log>
+</sequence>

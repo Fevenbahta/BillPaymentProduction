@@ -1,0 +1,408 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="awachPaymentSequence" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+    <!-- Initial logging and properties -->
+    <log level="custom">
+        <property name="Action" value=">> Entering awach sequence"/>
+        <property name="DAccountNo" expression="get-property('DAccountNo')" scope="default"/>
+    </log>
+    <property name="payload" expression="json-eval($)" scope="default"/>
+    <property name="referenceNo" expression="get-property('uri.var.referenceNo')" scope="default"/>
+    <property name="id" expression="json-eval($.data.id)" scope="default"/>
+    <property name="status" expression="json-eval($.data.attributes.state)" scope="default"/>
+
+    <!-- Log initial information -->
+    <log level="custom">
+        <property name="id" expression="json-eval($.data.id)" scope="default"/>
+        <property name="status" expression="json-eval($.data.attributes.state)" scope="default"/>
+        <property name="message" value="Processing EC Payment via Reference"/>
+        <property name="payload" expression="json-eval($)" scope="default"/>
+        <property name="referenceNo" expression="json-eval($.referenceNo)" scope="default"/>
+    </log>
+
+    <!-- Decode and validate token -->
+    <sequence key="decodeAndValidateTokenSeq"/>
+  
+    <!-- Lookup by ID in DB -->
+    <dblookup>
+        <connection>
+            <pool>
+                <dsName>jdbc/DbsBillPaymentDB</dsName>
+            </pool>
+        </connection>
+        <statement>
+            <sql>
+                SELECT * FROM public."awachtransfer" WHERE "RequestId" = ? 
+            </sql>
+            <parameter expression="get-property('id')" type="VARCHAR"/>
+            <result name="OrderId" column="OrderId"/>
+            <result name="ReferenceNo" column="ReferenceNo"/>
+            <result name="DAccountBranch" column="DAccountBranch"/>
+            <result name="DAccountNo" column="DAccountNo"/>
+            <result name="Reason" column="Reason"/>
+            <result name="Amount" column="Amount"/>
+            <result name="accountHolderName" column="DAccountName"/>
+            <result name="InvoiceId" column="InvoiceId"/>
+             <result name="dbsReferenceNo" column="dbsReferenceNo"/>
+            
+        </statement>
+    </dblookup>
+
+    <filter xpath="string-length(get-property('ReferenceNo')) > 0">
+    <then>
+        <property name="recordExists" value="1" scope="default"/>
+    </then>
+    <else>
+        <property name="recordExists" value="0" scope="default"/>
+    </else>
+</filter>
+    <!-- If status ≠ 'confirmed' and id not found in DB -->
+    <filter xpath="number(get-property('recordExists')) = 0">
+        <then>
+            <payloadFactory media-type="json">
+                <format>
+                    {"data":{"attributes":{"state":"failed"},"id":"$1"}}
+                </format>
+                <args>
+                    <arg expression="get-property('id')"/>
+                </args>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </then>
+    </filter>
+
+    <!-- Log retrieved database information -->
+    <log level="custom">
+        <property name="OrderId" expression="get-property('OrderId')"/>
+        <property name="ReferenceNo" expression="get-property('ReferenceNo')"/>
+        <property name="DAccountBranch" expression="get-property('DAccountBranch')"/>
+        <property name="DAccountNo" expression="get-property('DAccountNo')"/>
+        <property name="Amount" expression="get-property('Amount')"/>
+    </log>
+
+    <!-- Check if Amount exists -->
+    <filter xpath="boolean(get-property('Amount'))">
+        <then>
+            <!-- Generate unique reference for AWACH -->
+      <log level="custom">
+                <property name="Action" value=">> Generating AWACH token"/>
+            </log>
+
+                <property name="ReferenceNo" expression="get-property('ReferenceNo')" scope="default"/>
+                <property name="DAccountNo" expression="get-property('DAccountNo')" scope="default"/>
+                <property name="Amount" expression="get-property('Amount')" scope="default"/>
+                <property name="accountHolderName" expression="get-property('accountHolderName')" scope="default"/>
+           
+            <log level="custom">
+                <property name="ReferenceNo" expression="get-property('ReferenceNo')" scope="default"/>
+                <property name="DAccountNo" expression="get-property('DAccountNo')" scope="default"/>
+                <property name="Amount" expression="get-property('Amount')" scope="default"/>
+                <property name="accountHolderName" expression="get-property('accountHolderName')" scope="default"/>
+            </log>
+
+     
+          <script language="js"><![CDATA[
+    mc.setProperty("authString", "DO35V6fnHpZaPH07n7eTcStHNAca:FV_SQV18FZ3ik4S4Nf9IJ3eYoXwa");
+  ]]></script>
+
+  <header name="Authorization" expression="fn:concat('Basic ', base64Encode(get-property('authString')))" scope="transport"/>
+
+ <property name="Content-Type" value="application/json" scope="transport"/>
+<payloadFactory media-type="xml">
+    <format>
+        <auth>
+            <grant_type>client_credentials</grant_type>
+                  </auth>
+    </format>
+</payloadFactory>
+
+<!-- <header name="Content-Type" scope="transport" value="application/x-www-form-urlencoded"/> -->
+<property name="messageType" scope="axis2" type="STRING" value="application/x-www-form-urlencoded"/>
+    <property name="DISABLE_CHUNKING" scope="axis2" type="STRING" value="true"/>
+   <log level="full"/>
+<!-- <call>
+    <endpoint>
+        <http method="POST" uri-template="https://developer-uat.anbesabank.et/oauth2/token"/>
+    </endpoint>
+</call> -->
+
+
+<call>
+    <endpoint key="oauth2TokenEP"/>
+</call>
+
+<log level="full"/>
+
+    <!-- Step 2: Extract token from JSON response -->
+<property name="access_token" expression="json-eval($.access_token)" scope="default"/>
+
+<!-- Debug log immediately -->
+<log level="custom">
+    <property name="Extracted Access Token" expression="get-property('access_token')"/>
+</log>
+
+<!-- Step 3: Call AWACH API with Bearer token -->
+<!-- <property name="Content-Type" value="application/json" scope="transport"/>
+<property name="Authorization" expression="concat('Bearer ', get-property('access_token'))" scope="transport"/>
+
+<log level="custom">
+    <property name="AWACH_Request" value="Preparing to send AWACH Name check request with Bearer token"/>
+    <property name="access_token" expression="get-property('access_token')"/>
+</log>
+
+           
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                     
+                        "memberId": "1001224359",
+                        "channel": "USSD"
+                    }
+
+                </format>
+                <args>
+                    <arg expression="get-property('DAccountNo')"/>
+                </args>
+            </payloadFactory>
+
+        
+            <log level="full">
+                <property name="AWACH_Request" value="Sending to AWACH name check API"/>
+            </log>
+   
+            <call>
+                <endpoint>
+                    <http method="POST" 
+                          uri-template="https://api-in-uat.anbesabank.et/awach/1.0.0/validateAwachMember"/>
+                </endpoint>
+            </call>
+     
+            <log level="full">
+                <property name="AWACH_Response" value="Received from AWACH API"/>
+            </log>
+
+<property name="refNo" expression="json-eval($.refNo)" scope="default"/>
+<property name="fullName" expression="json-eval($.fullName)" scope="default"/>
+<log level="full"/> -->
+
+
+<!-- Debug log immediately -->
+<log level="custom">
+    <property name="Extracted Access Token" expression="get-property('access_token')"/>
+</log>
+
+<!-- Step 3: Call AWACH API with Bearer token -->
+<property name="Content-Type" value="application/json" scope="transport"/>
+<property name="Authorization" expression="concat('Bearer ', get-property('access_token'))" scope="transport"/>
+
+<log level="custom">
+    <property name="AWACH_Request" value="Preparing to send AWACH request with Bearer token"/>
+    <property name="access_token" expression="get-property('access_token')"/>
+</log>
+
+
+
+
+            <property name="newUuid" expression="get-property('ReferenceNo')" scope="default"/>
+
+            <property name="awachRefNo" expression="get-property('InvoiceId')" scope="default"/>
+            
+            <!-- Prepare AWACH API call -->
+            <payloadFactory media-type="json">
+                <format>
+                    {
+                        "accountDebited": "$1",
+                        "member_id": $4,
+                        "amount": $2,
+                        "refNo": "$3",
+                        "channel": "USSD"
+                    }
+                </format>
+                <args>
+                    <arg expression="get-property('DAccountNo')"/>
+                       
+                    <!-- Convert amount to integer (remove decimals) -->
+                    <arg expression="floor(number(get-property('Amount')))"/>
+                    <arg expression="get-property('awachRefNo')"/>
+                     <arg expression="get-property('OrderId')"/>
+                </args>
+            </payloadFactory>
+
+            <!-- Log AWACH request -->
+            <log level="full">
+                <property name="AWACH_Request" value="Sending to AWACH API"/>
+            </log>
+            
+            <!-- Call AWACH API -->
+            <!-- <call>
+                <endpoint>
+                    <http method="POST" 
+                          uri-template="https://api-in-uat.anbesabank.et/awach/1.0.0/outgoingFundTransfer"/>
+                </endpoint>
+            </call> -->
+            <call>
+    <endpoint key="outgoingFundTransferEP"/>
+</call>
+
+            <!-- Log AWACH response -->
+            <log level="full">
+                <property name="AWACH_Response" value="Received from AWACH API"/>
+            </log>
+            
+            <!-- Check AWACH response status -->
+            <property name="awachHttpStatus" expression="$axis2:HTTP_SC" scope="default"/>
+         
+  <filter source="get-property('awachHttpStatus')" regex="200">
+
+                <then>
+                    <!-- Update DB on success -->
+                    <dbreport>
+                        <connection>
+                            <pool>
+                                <dsName>jdbc/DbsBillPaymentDB</dsName>
+                            </pool>
+                        </connection>
+                        <statement>
+                            <sql>
+                                UPDATE public."awachtransfer"
+                                SET "ResponseStatus" = 'corebanking success'
+                                WHERE "RequestId" = ?
+                            </sql>
+                              <parameter expression="get-property('id')" type="VARCHAR"/>
+                        </statement>
+                    </dbreport>
+                    
+                    <!-- Generate receipt -->
+                    <property name="billerType" value="ET" scope="default"/>
+                    <payloadFactory media-type="json">
+                        <format>
+                            {
+                                "accountDebited": "$1",
+                                "accountCredited": "$2",
+                                "amount": "$3",
+                                "transactionId": "$4",
+                                "Fullname": "$5",
+                                "paymentType": "$6"
+                            }
+                        </format>
+                        <args>
+                            <arg expression="get-property('DAccountNo')" />
+                            <arg value="1001224359" /> <!-- AWACH member_id -->
+                            <arg expression="get-property('Amount')" />
+                            <arg expression="get-property('dbsReferenceNo')" />
+                            <arg expression="get-property('accountHolderName')" />
+                            <arg expression="get-property('billerType')" />
+                        </args>
+                    </payloadFactory>
+                    
+                    <!-- Call receipt API -->
+                    <property name="Content-Type" value="application/json" scope="transport"/>
+                    <!-- <call>
+                        <endpoint>
+                            <http uri-template="http://10.1.22.198:3060/generate-receipt" method="POST"/>
+                        </endpoint>
+                    </call> -->
+                    <call>
+    <endpoint key="generateBillReceiptEP"/>
+</call>
+
+                    
+                    <!-- Update receipt status in DB -->
+                    <property name="receiptStatus" expression="json-eval($.message)" scope="default"/>
+                    <dbreport>
+                        <connection>
+                            <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                        </connection>
+                        <statement>
+                            <sql>
+                                UPDATE public."awachtransfer"
+                                SET "ReceiptStatus" = ?
+                                WHERE "RequestId" = ?
+                            </sql>
+                            <parameter expression="get-property('receiptStatus')" type="VARCHAR"/>
+                            <parameter expression="get-property('id')" type="VARCHAR"/>
+                        </statement>
+                    </dbreport>
+                    
+                    <!-- Final success response -->
+                    <payloadFactory media-type="json">
+                        <format>
+                            {"data":{"attributes":{"state":"completed"},"id":"$1"}}
+                        </format>
+                        <args>
+                            <arg expression="get-property('id')"/>
+                        </args>
+                    </payloadFactory>
+                    <property name="HTTP_SC" value="200" scope="axis2"/>
+                </then>
+                <else>
+                    <!-- Update DB on failure -->
+                    <dbreport>
+                        <connection>
+                            <pool>
+                                <dsName>jdbc/DbsBillPaymentDB</dsName>
+                            </pool>
+                        </connection>
+                        <statement>
+                            <sql>
+                                UPDATE public."awachtransfer"
+                                SET "ResponseStatus" = 'core banking fail'
+                                   
+                                WHERE "RequestId" = ?
+                            </sql>
+                                                    <parameter expression="get-property('id')" type="VARCHAR"/>
+                        </statement>
+                    </dbreport>
+                    
+                    <!-- Error response -->
+                    <payloadFactory media-type="json">
+                        <format>
+                            {"data":{"attributes":{"state":"failed"},"id":"$1"}}
+                        </format>
+                        <args>
+                            <arg expression="get-property('id')"/>
+                        </args>
+                    </payloadFactory>
+                    <property name="HTTP_SC" value="400" scope="axis2"/>
+                </else>
+            </filter>
+            <respond/>
+        </then>
+        <else>
+            <!-- Handle missing Amount -->
+            <payloadFactory media-type="json">
+                <format>
+                    {"data":{"attributes":{"state":"failed"},"id":"$1"}}
+                </format>
+                <args>
+                    <arg expression="get-property('id')"/>
+                </args>
+            </payloadFactory>
+            <property name="HTTP_SC" value="400" scope="axis2"/>
+            <respond/>
+        </else>
+    </filter>
+    <log level="custom">
+        <property name="Action" value=">> Exiting awachPaymentSequence sequence"/>
+    </log>
+</sequence> 
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

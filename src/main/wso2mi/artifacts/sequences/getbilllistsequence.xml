@@ -75,11 +75,14 @@
     </log>
     <property name="Content-Type" value="text/xml" scope="transport"/>
 
-            <call>
+            <!-- <call>
                 <endpoint>
                     <address format="soap11" uri="https://10.1.7.85:8095/getECInvoiceList"/>
                 </endpoint>
-            </call>
+            </call> -->
+<call>
+    <endpoint key="getECInvoiceListEP"/>
+</call>
 
     <log description="Log SOAP Payload" level="custom">
         <property name="SOAP Payload" expression="$body"/>
@@ -167,7 +170,7 @@
             <dbreport>
                 <connection>
                     <pool>
-                        <dsName>jdbc/PostgresDB</dsName>
+                        <dsName>jdbc/DbsBillPaymentDB</dsName>
                     </pool>
                 </connection>
                 <statement>
@@ -216,7 +219,7 @@
     <!-- Return the full array as the response -->
     <payloadFactory media-type="json">
         <format>
-            [{ "invoices": $1 }]
+            [$1 ]
         </format>
         <args>
             <arg expression="get-property('invoiceItems')"/>
@@ -278,7 +281,7 @@
            <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/PostgresDB</dsName>
+                    <dsName>jdbc/DbsBillPaymentDB</dsName>
                 </pool>
             </connection>
             <statement>
@@ -316,7 +319,7 @@
 <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/PostgresDB</dsName>
+                    <dsName>jdbc/DbsBillPaymentDB</dsName>
                 </pool>
             </connection>
             <statement>

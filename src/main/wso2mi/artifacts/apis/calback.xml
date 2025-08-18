@@ -1,0 +1,31 @@
+<api context="/billcallback" name="billcallback" xmlns="http://ws.apache.org/ns/synapse">
+  <resource methods="PATCH" uri-template="/{referenceNo}">
+    <inSequence>
+      <!-- Extract referenceNo from URL -->
+      <property name="referenceNo" expression="get-property('uri.var.referenceNo')" scope="default"/>
+
+      <!-- Extract body (payload) as a string and convert to JSON context -->
+      <property name="jsonPayload" expression="json-eval($)" scope="default"/>
+
+      <!-- Optionally log input -->
+      <log level="custom">
+        <property name="message" value="Incoming PATCH request to /billcallback/{referenceNo}"/>
+        <property name="referenceNo" expression="get-property('referenceNo')"/>
+        <property name="payload" expression="get-property('jsonPayload')"/>
+      </log>
+
+      <!-- Call your business logic sequence -->
+      <!-- <sequence key="executePayment"/> -->
+    <sequence key="executePaymentVite"/>  
+    </inSequence>
+
+    <outSequence>
+      <send/>
+    </outSequence>
+
+    <faultSequence>
+      <log level="full"/>
+      <send/>
+    </faultSequence>
+  </resource>
+</api>
