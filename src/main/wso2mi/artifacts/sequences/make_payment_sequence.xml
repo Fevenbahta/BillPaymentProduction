@@ -13,7 +13,7 @@
 <dblookup>
     <connection>
         <pool>
-            <dsName>jdbc/DbsBillPaymentDB</dsName>
+            <dsName>jdbc/PostgresDB</dsName>
         </pool>
     </connection>
     <statement>
@@ -77,7 +77,7 @@
                 "providerId": "$3",
                 "paymentAmount": "$4",
                 "accountNo": "$5",
-                "reason": "$6",
+                "Reason": "$6",
                 "branch": "$7"
             }
         </format>
@@ -144,7 +144,7 @@
             </log>
             <dbreport>
                 <connection>
-                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                    <pool><dsName>jdbc/PostgresDB</dsName></pool>
                 </connection>
                 <statement>
                     <sql>
@@ -174,7 +174,8 @@
                     "amount": "$3",
                     "transactionId": "$4",
                     "Fullname": "$5",
-                    "paymentType": "$6"
+                    "paymentType": "$6",
+                    "Reason": "$7"
                 }
             </format>
             <args>
@@ -184,6 +185,7 @@
                 <arg expression="get-property('dbsReferenceNo')" />
                 <arg expression="get-property('accountHolderName')" />
                 <arg expression="get-property('billerType')" />
+                <arg expression="get-property('reason')" />
             </args>
         </payloadFactory>
         <log level="full"/>
@@ -194,6 +196,7 @@
 <property name="dbsReferenceNo" expression="get-property('dbsReferenceNo')" scope="default"/> 
 <property name="accountHolderName" expression="get-property('accountHolderName')" scope="default"/>
 <property name="billerType" expression="get-property('billerType')" scope="default"/>
+
   </log>
 
         <!-- Set content-type header -->
@@ -219,7 +222,7 @@
 
                             <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/PostgresDB</dsName></pool>
                                 </connection>
                                 <statement>
                                     <sql>
@@ -264,7 +267,7 @@ WHERE "Id" = (
             </log>
             <dbreport>
                 <connection>
-                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                    <pool><dsName>jdbc/PostgresDB</dsName></pool>
                 </connection>
                 <statement>
                     <sql>

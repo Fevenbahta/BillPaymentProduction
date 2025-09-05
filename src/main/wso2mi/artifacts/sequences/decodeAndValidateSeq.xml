@@ -46,7 +46,7 @@
                 throw new Error("Token has expired");
             }
 
-            var jwksUrl = 'https://idp.uat.anbesabank.et/auth/realms/neo-customer/protocol/openid-connect/certs';
+            var jwksUrl = 'https://idp.anbesabank.et/auth/realms/neo-customer/protocol/openid-connect/certs';
             httpClient = Packages.org.apache.http.impl.client.HttpClients.createDefault();
             var response = httpClient.execute(new Packages.org.apache.http.client.methods.HttpGet(jwksUrl));
             var jwks = JSON.parse(Packages.org.apache.http.util.EntityUtils.toString(response.getEntity()));

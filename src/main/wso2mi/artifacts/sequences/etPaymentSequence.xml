@@ -368,7 +368,7 @@
         
         
 
-                           <payloadFactory media-type="json">
+                      <payloadFactory media-type="json">
             <format>
                 {
                     "accountDebited": "$1",
@@ -376,7 +376,8 @@
                     "amount": "$3",
                     "transactionId": "$4",
                     "Fullname": "$5",
-                    "paymentType": "ET"
+                    "paymentType": "ET",
+                    "reason": "$7"
                 }
             </format>
             <args>
@@ -386,6 +387,7 @@
                 <arg expression="get-property('dbsReferenceNo')" />
                 <arg expression="get-property('accountHolderName')" />
                 <arg expression="get-property('billerType')" />
+                   <arg expression="get-property('reason')" />
             </args>
         </payloadFactory>
 <log level="full"/>

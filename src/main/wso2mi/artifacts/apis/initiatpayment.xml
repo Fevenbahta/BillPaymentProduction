@@ -60,6 +60,7 @@
                           }
     </script>
 
+<property name="reason" expression="json-eval($.reason)"/>
 
  <switch source="get-property('terminateFlow')">
     <case regex="true">

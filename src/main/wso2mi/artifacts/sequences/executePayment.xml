@@ -303,7 +303,7 @@
 
 
                             
-                              <payloadFactory media-type="json">
+                                     <payloadFactory media-type="json">
             <format>
                 {
                     "accountDebited": "$1",
@@ -311,7 +311,8 @@
                     "amount": "$3",
                     "transactionId": "$4",
                     "Fullname": "$5",
-                    "paymentType": "$6"
+                    "paymentType": "$6",
+                    "Reason": "$7"
                 }
             </format>
             <args>
@@ -321,6 +322,7 @@
                 <arg expression="get-property('referenceId')" />
                 <arg expression="get-property('accountHolderName')" />
                 <arg expression="get-property('billerType')" />
+                <arg expression="get-property('reason')" />
             </args>
         </payloadFactory>
 

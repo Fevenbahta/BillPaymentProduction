@@ -14,6 +14,7 @@
 <property name="CAccountNo" value="1100223344"/>
 <property name="CAccountName" value="Airlines Gl"/>
 <property name="ResponseStatus" value="Pending"/>
+
 <property name="ErrorReason" value=""/>
 <property name="IsSuccessful" value="false"/>
 <property name="OrderId" expression="json-eval($.customerCode)"/>
@@ -25,6 +26,7 @@
 <property name="requestedBy" value="DBS"/>
 <property name="DAccountBranch" expression="json-eval($.branch)"/>
 <property name="TraceNumber" expression="json-eval($.invoiceId)"/>
+<property name="reason" expression="json-eval($.reason)"/>
 
 <log level="full"/>
 

@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <endpoint name="queryBillsEP" xmlns="http://ws.apache.org/ns/synapse">
-    <http method="post" uri-template="http://10.1.8.45:7070/api/transactions/EXT_P/query_bills">
+    <http method="post" uri-template="http://10.1.7.45:7070/api/transactions/EXT_P/query_bills">
         <suspendOnFailure>
             <initialDuration>-1</initialDuration>
             <progressionFactor>1</progressionFactor>
