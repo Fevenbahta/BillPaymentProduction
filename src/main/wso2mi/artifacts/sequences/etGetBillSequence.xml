@@ -3,7 +3,7 @@
     <!-- Start Log -->
     <!-- Extract from JSON -->
 <property name="orderId" expression="json-eval($.uniqueCode)" scope="default"/>
-<property name="shortCode" value="526341" scope="default"/>
+<property name="shortCode" value="858682" scope="default"/>
 
 <!-- Validate orderId -->
 <filter xpath="not(get-property('orderId'))">
@@ -98,7 +98,7 @@
     <!-- Call the external API -->
 <!-- Set the string with literal & -->
 <script language="js"><![CDATA[
-   mc.setProperty("authString", "lionbanktest@ethiopianairlines.com:LI*&%@54778Ba");
+   mc.setProperty("authString", "LionProd@ethiopianairlines.com:Lion@28#2&FJD*Q!03390");
 ]]></script>
 
 <header name="Authorization" expression="fn:concat('Basic ', base64Encode(get-property('authString')))" scope="transport"/>
@@ -148,11 +148,11 @@
     <!-- Log Response -->
     <log level="full">
         <property name="Step" value="Received Response"/>
-        <property name="HTTP Status" expression="get-property('HTTP_SC')"/>
+        <property name="statusCodeResponse Status" expression="get-property('statusCodeResponse')"/>
         <property name="ResponsePayload" expression="json-eval($.)"/>
     </log>
 
-    <filter source="get-property('HTTP_SC')" regex="200">
+    <filter source="get-property('statusCodeResponse')" regex="1">
         <then>
             <log level="custom">
                 <property name="getStatus" value="Success"/>
@@ -162,7 +162,7 @@
         <else>
             <log level="custom">
                 <property name="getStatus" value="Failed"/>
-                <property name="HTTP Status" expression="get-property('HTTP_SC')"/>
+                <property name="statusCodeResponse" expression="get-property('statusCodeResponse')"/>
             </log>
             <property name="error" value="getbill infor from airlines  failed. HTTP status not 200" scope="default"/>
    
@@ -207,7 +207,7 @@
 <dbreport>
   <connection>
     <pool>
-      <dsName>jdbc/DbsBillPaymentDB</dsName>
+      <dsName>jdbc/DbsTransferDispatcherDB</dsName>
     </pool>
   </connection>
   <statement>
@@ -261,7 +261,7 @@
         var success = [
             {
                 "status": "0",
-                "providerId": "526341",
+                "providerId": "858682",
                 "invoiceId": response.traceNumber,
                 "invoiceIdentificationValue": "INVD" + response.traceNumber,
                 "invoiceAmount": response.amount.toFixed(4),

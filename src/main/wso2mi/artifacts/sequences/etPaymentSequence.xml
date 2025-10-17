@@ -46,7 +46,7 @@
     <dblookup>
         <connection>
             <pool>
-                <dsName>jdbc/DbsBillPaymentDB</dsName>
+                <dsName>jdbc/DbsTransferDispatcherDB</dsName>
             </pool>
         </connection>
         <statement>
@@ -66,7 +66,7 @@
             <result name="DAccountNo" column="DAccountNo"/>
             <result name="Reason" column="Reason"/>
             <result name="Amount" column="Amount"/>
-                 <result name="TraceNumber" column="Amount"/>
+                 <result name="TraceNumber" column="TraceNumber"/>
   <result name="accountHolderName" column="DAccountName"/>
   <result name="dbsReferenceNo" column="dbsReferenceNo"/>
         </statement>
@@ -139,7 +139,7 @@
     <!-- Call the external API -->
 <!-- Set the string with literal & -->
 <script language="js"><![CDATA[
-   mc.setProperty("authString", "lionbanktest@ethiopianairlines.com:LI*&%@54778Ba");
+   mc.setProperty("authString", "LionProd@ethiopianairlines.com:Lion@28#2&FJD*Q!03390");
 ]]></script>
 
 <header name="Authorization" expression="fn:concat('Basic ', base64Encode(get-property('authString')))" scope="transport"/>
@@ -167,7 +167,7 @@
 
         var success = [{
             "status": "0",
-            "providerId": "526341",
+            "providerId": "858682",
             "invoiceId": response.traceNumber,
             "invoiceIdentificationValue": "INVD" + response.traceNumber,
             "invoiceAmount": Number(response.amount || 0).toFixed(4),
@@ -342,7 +342,7 @@
         <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                 </pool>
             </connection>
             <statement>
@@ -367,6 +367,7 @@
         
         
         
+<sequence key="getCustomerName"/> 
 
                       <payloadFactory media-type="json">
             <format>
@@ -377,7 +378,8 @@
                     "transactionId": "$4",
                     "Fullname": "$5",
                     "paymentType": "ET",
-                    "reason": "$7"
+                    "reason": "$7",
+                    "ReceiverName": "$8"
                 }
             </format>
             <args>
@@ -388,6 +390,7 @@
                 <arg expression="get-property('accountHolderName')" />
                 <arg expression="get-property('billerType')" />
                    <arg expression="get-property('reason')" />
+                <arg expression="get-property('customerName')" />
             </args>
         </payloadFactory>
 <log level="full"/>
@@ -416,7 +419,7 @@
 
                             <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                     <sql>
@@ -468,10 +471,10 @@ WHERE "Id" = (
         <arg value="ETB"/>
         <arg value="1"/>
         <arg value="Successfully Paid"/>
-        <arg value="526341"/>
+        <arg value="858682"/>
         <arg expression="get-property('TraceNumber')"/>
         <arg expression="get-property('dbsReferenceNo')"/>
-        <arg expression="get-property('accountHolderName')"/>
+       <arg expression="fn:normalize-space(get-property('accountHolderName'))"/>
         <arg expression="get-property('debtorAccountId')"/>
     </args>
 </payloadFactory>
@@ -579,7 +582,7 @@ WHERE "Id" = (
   <dbreport>
     <connection>
       <pool>
-        <dsName>jdbc/DbsBillPaymentDB</dsName>
+        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
       </pool>
     </connection>
     <statement>
@@ -647,7 +650,7 @@ WHERE "Id" = (
         <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                 </pool>
             </connection>
             <statement>

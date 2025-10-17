@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<sequence name="getCustomerName" trace="disable" xmlns="http://ws.apache.org/ns/synapse">
+
+
+<log>
+        <property name="Step" value="Start getCustomerName Sequence"/>
+        <property name="billerType" expression="get-property('billerType')"/>
+        <property name="orderId" expression="get-property('OrderId')"/>
+        <property name="uniqueCode" expression="get-property('invoiceId')"/>
+    </log>
+    <filter xpath="get-property('billerType') = 'ET'">
+        <then>
+            <!-- DB Lookup for Airlines Order (ET) -->
+            <dblookup>
+                <connection>
+                    <pool>
+                        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
+                    </pool>
+                </connection>
+                <statement>
+                    <sql>
+                        SELECT * FROM public."airlinesorder" WHERE "OrderId" = ? AND "BillerType"=?
+                    </sql>
+                    <parameter expression="get-property('orderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                    <result name="providerId" column="ProviderId"/>
+                    <result name="customerName" column="CustomerName"/>
+                </statement>
+            </dblookup>
+
+            <log level="custom">
+                <property name="providerIdEt" expression="get-property('providerId')"/>
+                <property name="customerName" expression="get-property('customerName')"/>
+            </log>
+        </then>
+        <else>
+             <filter xpath="get-property('billerType') = 'Awach'">
+        <then>
+            <!-- DB Lookup for Airlines Order (ET) -->
+            <dblookup>
+                <connection>
+                    <pool>
+                        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
+                    </pool>
+                </connection>
+                <statement>
+                    <sql>
+                        SELECT * FROM public."awachorder" WHERE "OrderId" = ? AND "BillerType"=?
+                    </sql>
+                    <parameter expression="get-property('orderId')" type="VARCHAR"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                    <result name="statusCodeResponse" column="statusCodeResponse"/>
+          
+                </statement>
+            </dblookup>
+ <property name="customerName" expression="json-eval($.fullName)"/>
+           <log level="custom">
+    <property name="statusCodeResponse" expression="get-property('statusCodeResponse')"/>
+    <property name="customerName" expression="json-eval($.fullName)"/>
+</log>
+
+        </then>
+        <else>
+            <!-- DB Lookup for BillGetRequests (school/water/others) -->
+            <dblookup>
+                <connection>
+                    <pool>
+                        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
+                    </pool>
+                </connection>
+                <statement>
+                    <sql>
+                        SELECT * FROM public."BillGetRequests" WHERE "UniqueCode" = ? AND "BillerType"=?
+                    </sql>
+                    <parameter expression="get-property('uniqueCode')" type="VARCHAR"/>
+                    <parameter expression="get-property('billerType')" type="VARCHAR"/>
+                    
+                    <result name="customerName" column="CustomerName"/>
+                </statement>
+            </dblookup>
+
+            <log level="custom">
+                <property name="customerNameBILL" expression="get-property('customerName')"/>
+            </log>
+        </else>
+    </filter>
+
+        </else>
+    </filter>
+
+</sequence>

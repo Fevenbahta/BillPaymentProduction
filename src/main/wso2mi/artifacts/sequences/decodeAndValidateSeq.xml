@@ -74,7 +74,9 @@
             mc.setProperty("isValid", "true");
             mc.setProperty("header", JSON.stringify(header));
             mc.setProperty("payload", JSON.stringify(payload));
-
+             if (payload.azp) {
+               mc.setProperty("azp", payload.azp);
+                     }
         } catch (e) {
             mc.setProperty("isValid", "false");
             mc.setProperty("errorMessage", e.message);
@@ -84,7 +86,9 @@
             }
         }
     ]]></script>
-
+<log level="custom">
+    <property name="AZP" expression="get-property('azp')"/>
+</log>
     <!-- Error response if invalid -->
     <filter source="get-property('isValid')" regex="false">
         <then>

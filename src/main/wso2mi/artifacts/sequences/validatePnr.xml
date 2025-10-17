@@ -19,7 +19,7 @@
 
     <property name="validatePNRSequence" value="in validatePNRSequence" scope="default"/>
     <property name="orderId" expression="get-property('OrderId')" scope="default"/>
-    <property name="shortCode" value="526341" scope="default"/>
+    <property name="shortCode" value="858682" scope="default"/>
 
     <!-- Validate orderId -->
     <filter xpath="not(get-property('orderId'))">
@@ -99,7 +99,7 @@
     <property name="Content-Type" value="application/json" scope="transport"/>
 
     <script language="js"><![CDATA[
-        mc.setProperty("authString", "lionbanktest@ethiopianairlines.com:LI*&%@54778Ba");
+        mc.setProperty("authString", "LionProd@ethiopianairlines.com:Lion@28#2&FJD*Q!03390");
     ]]></script>
 
     <header name="Authorization" expression="fn:concat('Basic ', base64Encode(get-property('authString')))" scope="transport"/>
@@ -203,7 +203,7 @@
             var success = [
                 {
                     "status": "0",
-                    "providerId": "526341",
+                    "providerId": "858682",
                     "invoiceId": response.traceNumber,
                     "invoiceIdentificationValue": "INVD" + response.traceNumber,
                     "invoiceAmount": response.amount.toFixed(4),

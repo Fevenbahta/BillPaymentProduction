@@ -3,12 +3,12 @@
 
     <!-- Extract request fields -->
     <property name="uniqueCode" expression="json-eval($.uniqueCode)" scope="default"/>
-    <property name="shortCode" value="526341" scope="default"/>
+    <property name="shortCode" value="858682" scope="default"/>
     <property name="orderId" expression="json-eval($.uniqueCode)" scope="default"/>
 
 <log>
      <property name="uniqueCode" expression="json-eval($.uniqueCode)" scope="default"/>
-    <property name="shortCode" value="526341" scope="default"/>
+    <property name="shortCode" value="858682" scope="default"/>
     <property name="orderId" expression="json-eval($.uniqueCode)" scope="default"/>
 
 </log>
@@ -161,7 +161,7 @@
     <dbreport>
         <connection>
             <pool>
-                <dsName>jdbc/DbsBillPaymentDB</dsName>
+                <dsName>jdbc/DbsTransferDispatcherDB</dsName>
             </pool>
         </connection>
         <statement>
@@ -200,7 +200,7 @@
             var success = [
                 {
                     "status": "0",
-                    "providerId": "526341",
+                    "providerId": "858682",
                     "invoiceId": response.refNo,
                     "invoiceIdentificationValue": response.refNo,
                     "invoiceAmount": 0,

@@ -3,62 +3,59 @@
     <resource methods="POST" uri-template="/">
         <inSequence>
                 
-    <script language="js">
-        var payload = mc.getPayloadJSON();
+ <script language="js"><![CDATA[
+    var payload = mc.getPayloadJSON();
+    var billerType = payload.billerType;
+    var paymentAmount = payload.paymentAmount;
 
-        var billerType = payload.billerType;
-        
-    
+    var missingFields = [];
 
+    if (!billerType) {
+        missingFields.push("billerType");
+    }
+    if (!paymentAmount) {
+        missingFields.push("paymentAmount");
+    }
 
-        // Validation logic: Ensure required fields are present and valid
-        var missingFields = [];
-        
-     
-        // Check for other required fields
-        if (!billerType) {
-            missingFields.push("billerType");
+    if (billerType && billerType.toLowerCase() === "topup") {
+        if (!paymentAmount || parseFloat(paymentAmount) < 5) {
+            missingFields.push("paymentAmount (must be > 5 for TopUp)");
         }
-       
-       
+    }
 
-        // If any fields are missing, set error response
-        if (missingFields.length > 0) {
-            mc.setProperty("errorCode", "400");
-            var errorMessage = "The following fields are missing or invalid: " + missingFields.join(", ");
-            mc.setProperty("errorMessage", errorMessage);
+    if (missingFields.length > 0) {
+        mc.setProperty("errorCode", "400");
+        var errorMessage = "The following fields are missing or invalid: " + missingFields.join(", ");
+        mc.setProperty("errorMessage", errorMessage);
 
-            // Create a dynamic error message based on missing fields
-            var errorResponse = {
-                "returnCode": "ERROR",
-                "ticketId": "247f4b-5d7b-4d32-a1db-f893edaa38a7", // You can generate or assign dynamically if needed
-                "traceId": "92e9013d25cca084", // You can generate or assign dynamically if needed
-                "feedbacks": [
-                    {
-                        "code": "SB_DS_001",  // Error code (define as per your system)
-                        "label": "Validation failed",  // Error description
-                        "severity": "ERROR",  // Severity of the error
-                        "type": "BUS",  // Business error type
-                        "source": "validateBillGetPayload",  // The sequence or resource that caused the error
-                        "origin": "WSO2-MI",  // Origin of the error
-                        "spanId": "92e9013d",  // Trace information if available
-                        "parameters": [
-                            {
-                                "code": "0",  // Parameter code
-                                "value": "Missing or invalid field(s): " + missingFields.join(", ") // Dynamic message based on missing fields
-                            }
-                        ]
-                    }
-                ],
-                      };
+        var errorResponse = {
+            "returnCode": "ERROR",
+            "ticketId": "247f4b-5d7b-4d32-a1db-f893edaa38a7",
+            "traceId": "92e9013d25cca084",
+            "feedbacks": [
+                {
+                    "code": "SB_DS_001",
+                    "label": "Validation failed",
+                    "severity": "ERROR",
+                    "type": "BUS",
+                    "source": "validateBillGetPayload",
+                    "origin": "WSO2-MI",
+                    "spanId": "92e9013d",
+                    "parameters": [
+                        {
+                            "code": "0",
+                            "value": "Missing or invalid field(s): " + missingFields.join(", ")
+                        }
+                    ]
+                }
+            ]
+        };
 
-            mc.setPayloadJSON(errorResponse);  // Set the error response
+        mc.setPayloadJSON(errorResponse);
+        mc.setProperty("terminateFlow", "true");
+    }
+]]></script>
 
-            // Now, use the Respond mediator to terminate the flow
-            mc.setProperty("terminateFlow", "true");  // Flag to stop further processing
-        } else {
-                          }
-    </script>
 
 <property name="reason" expression="json-eval($.reason)"/>
 

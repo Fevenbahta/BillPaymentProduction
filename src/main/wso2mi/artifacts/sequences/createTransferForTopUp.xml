@@ -149,7 +149,7 @@
     
     <log level="full"/>
      <log level="full">
-          <property name="calling " value="ceate transfer" scope="transport"/>
+          <property name="calling " value="create transfer" scope="transport"/>
 
      </log>
 
@@ -168,6 +168,15 @@
             <address format="soap11" uri="https://10.1.7.85:8095/createTransfer"/>
         </endpoint>
     </call> -->
+
+
+
+
+    <header name="Accept" scope="transport" action="remove"/>
+<header name="Accept" scope="transport" action="set" value="text/xml"/>
+<property name="messageType" scope="axis2" type="STRING" value="text/xml"/>
+<property name="ContentType" scope="axis2" type="STRING" value="text/xml"/>
+
 <call>
     <endpoint key="createTransferBillEP"/>
 </call>

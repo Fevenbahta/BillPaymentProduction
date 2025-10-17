@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <endpoint name="confirmableActionEP" xmlns="http://ws.apache.org/ns/synapse">
-    <http method="post"   uri-template="https://api.uat.anbesabank.et/dbs/foundation/confirmables/v1/actions/{uri.var.ReferenceNumber}">
+    <http method="put" uri-template="https://api.anbesabank.et/dbs/foundation/confirmables/v1/actions/{uri.var.ReferenceNumber}">
         <suspendOnFailure>
             <initialDuration>-1</initialDuration>
             <progressionFactor>1</progressionFactor>

@@ -22,7 +22,7 @@
 <property name="ErrorReason" value=""/>
 <property name="IsSuccessful" value="false"/>
 <property name="OrderId" expression="json-eval($.customerCode)"/>
-<property name="MerchantCode" value="526341"/>
+<property name="MerchantCode" value="858682"/>
 <property name="DbsUserId" expression="json-eval($.dbsUserId)"/>
 <!-- Hardcoded values -->
 <property name="updatedBy" value="Customer"/>
@@ -94,7 +94,7 @@
             <!-- Save the request in DB -->
             <dbreport>
                 <connection>
-                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                 </connection>
                 <statement>
                     <sql>
@@ -271,7 +271,7 @@
         <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                 </pool>
             </connection>
             <statement>
@@ -298,6 +298,7 @@
 
 
 
+<sequence key="getCustomerName"/> 
 
 
                  <payloadFactory media-type="json">
@@ -309,7 +310,8 @@
                     "transactionId": "$4",
                     "Fullname": "$5",
                     "paymentType": "ET",
-                    "reason": "$7"
+                    "reason": "$7",
+                    "ReceiverName": "$8"
                 }
             </format>
             <args>
@@ -320,6 +322,7 @@
                 <arg expression="get-property('accountHolderName')" />
                 <arg expression="get-property('billerType')" />
                    <arg expression="get-property('reason')" />
+                <arg expression="get-property('customerName')" />
             </args>
         </payloadFactory>
 <log level="full"/>
@@ -347,7 +350,7 @@
 
                             <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                     <sql>
@@ -400,11 +403,11 @@ WHERE "Id" = (
         <arg value="ETB"/>
         <arg value="1"/>
         <arg value="Successfully Paid"/>
-        <arg value="526341"/>
+        <arg value="858682"/>
         <arg expression="get-property('TraceNumber')"/>
         <arg expression="get-property('dbsReferenceNo')"/>
-        <arg expression="get-property('accountHolderName')"/>
-        <arg expression="get-property('debtorAccountId')"/>
+        <arg expression="fn:normalize-space(get-property('accountHolderName'))"/>
+       <arg expression="get-property('debtorAccountId')"/>
     </args>
 </payloadFactory>
 
@@ -511,7 +514,7 @@ WHERE "Id" = (
   <dbreport>
     <connection>
       <pool>
-        <dsName>jdbc/DbsBillPaymentDB</dsName>
+        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
       </pool>
     </connection>
     <statement>
@@ -569,7 +572,7 @@ WHERE "Id" = (
         <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                 </pool>
             </connection>
             <statement>

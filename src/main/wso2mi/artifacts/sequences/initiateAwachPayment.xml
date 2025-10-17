@@ -14,7 +14,7 @@
 <property name="ErrorReason" value=""/>
 <property name="IsSuccessful" value="false"/>
 <property name="OrderId" expression="json-eval($.customerCode)"/>
-<property name="MerchantCode" value="526341"/>
+<property name="MerchantCode" value="858682"/>
 <property name="DbsUserId" expression="json-eval($.dbsUserId)"/>
 <!-- Hardcoded values -->
 <property name="updatedBy" value="Customer"/>
@@ -76,7 +76,7 @@
          
 <dbreport>
     <connection>
-        <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+        <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
     </connection>
     <statement>
         <sql>
@@ -222,7 +222,7 @@
     <then>
         <dbreport>
             <connection>
-                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
             </connection>
             <statement>
                 <sql>
@@ -242,7 +242,7 @@ WHERE "ReferenceNo" = ?
     <else>
         <dbreport>
             <connection>
-                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
             </connection>
             <statement>
                 <sql>
@@ -273,7 +273,7 @@ WHERE "ReferenceNo" = ?
 
 <dbreport>
     <connection>
-        <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+        <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
     </connection>
     <statement>
         <sql>

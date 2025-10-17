@@ -178,7 +178,7 @@
             <dbreport>
                 <connection>
                     <pool>
-                        <dsName>jdbc/DbsBillPaymentDB</dsName>
+                        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                     </pool>
                 </connection>
                 <statement>
@@ -277,7 +277,7 @@
                <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                 </pool>
             </connection>
             <statement>
@@ -318,7 +318,7 @@
 <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                 </pool>
             </connection>
             <statement>

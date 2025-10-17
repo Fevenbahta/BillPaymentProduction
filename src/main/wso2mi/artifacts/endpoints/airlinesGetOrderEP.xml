@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <endpoint name="airlinesGetOrderEP" xmlns="http://ws.apache.org/ns/synapse">
-    <http method="get" uri-template="https://flyprod.ethiopianairlines.com/Lion/api/V1.0/Lion/GetOrder?orderId={uri.var.orderId}&amp;amp;shortCode={uri.var.shortCode}">
+    <http method="get" uri-template="https://flyprod.ethiopianairlines.com/Lion/api/V1.0/Lion/GetOrder?orderId={uri.var.orderId}&amp;shortCode={uri.var.shortCode}">
         <suspendOnFailure>
             <initialDuration>-1</initialDuration>
             <progressionFactor>1</progressionFactor>

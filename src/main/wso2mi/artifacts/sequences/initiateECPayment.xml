@@ -85,7 +85,7 @@
 <dblookup>
     <connection>
         <pool>
-            <dsName>jdbc/DbsBillPaymentDB</dsName>
+            <dsName>jdbc/DbsTransferDispatcherDB</dsName>
         </pool>
     </connection>
     <statement>
@@ -156,7 +156,7 @@
             <!-- Save the request in DB -->
             <dbreport>
                 <connection>
-                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                 </connection>
                 <statement>
                     <sql>
@@ -332,7 +332,7 @@
     <then>
         <dbreport>
             <connection>
-                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
             </connection>
             <statement>
                 <sql>
@@ -352,7 +352,7 @@ WHERE "ReferenceNo" = ?
     <else>
         <dbreport>
             <connection>
-                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
             </connection>
             <statement>
                 <sql>

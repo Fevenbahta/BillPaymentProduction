@@ -42,7 +42,7 @@
 <dblookup>
     <connection>
         <pool>
-            <dsName>jdbc/DbsBillPaymentDB</dsName>
+            <dsName>jdbc/DbsTransferDispatcherDB</dsName>
         </pool>
     </connection>
     <statement>
@@ -177,8 +177,8 @@
         <property name="paymentAmount" expression="get-property('paymentAmount')" scope="default"/>
 
         <!-- For creditor, you can also set dynamically or hardcode for now -->
-        <property name="creditorAccountId" value="24101900001" scope="default"/>
-        <property name="creditorBranchId" value="00001" scope="default"/>
+        <property name="creditorAccountId" value="00711858631" scope="default"/>
+        <property name="creditorBranchId" value="00003" scope="default"/>
 <script language="js"><![CDATA[
     // Get the 'paymentAmount' property from the message context
     var paymentAmount = mc.getProperty('paymentAmount');
@@ -271,7 +271,7 @@
          <log level="full"/>
                 <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                     <sql>
@@ -298,6 +298,7 @@
 
 
 
+<sequence key="getCustomerName"/> 
 
 
 
@@ -349,7 +350,7 @@
 
                             <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                     <sql>
@@ -390,7 +391,7 @@ WHERE "Id" = (
 
                 <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                    <sql>
@@ -420,7 +421,7 @@ WHERE "Id" = (
         <else>
                 <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                   <sql>
@@ -469,7 +470,7 @@ WHERE "Id" = (
    
                 <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                     <sql>
@@ -589,6 +590,7 @@ WHERE "Id" = (
 
 
 
+<sequence key="getCustomerName"/> 
         <!-- Prepare receipt payload -->
         <payloadFactory media-type="json">
             <format>
@@ -598,7 +600,9 @@ WHERE "Id" = (
                     "amount": "$3",
                     "transactionId": "$4",
                     "Fullname": "$5",
-                    "paymentType": "$6"
+                    "paymentType": "$6",
+                    "Reason": "$7",
+                    "ReceiverName": "$8"
                 }
             </format>
             <args>
@@ -608,6 +612,8 @@ WHERE "Id" = (
                 <arg expression="get-property('referenceId')" />
                 <arg expression="get-property('accountHolderName')" />
                 <arg expression="get-property('billerType')" />
+                <arg expression="get-property('reason')" />
+                <arg expression="get-property('customerName')" />
             </args>
         </payloadFactory>
 
@@ -634,7 +640,7 @@ WHERE "Id" = (
 
                             <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                     <sql>
@@ -676,7 +682,7 @@ WHERE "Id" = (
                             <!-- Update payment status to fail -->
                             <dbreport>
                                 <connection>
-                                    <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                                    <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
                                 </connection>
                                 <statement>
                                     <sql>

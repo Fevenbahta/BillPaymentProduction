@@ -5,10 +5,10 @@
 
 
 
-<property name="MsgId" value=""/>
-<property name="PmtInfId" value=""/>
-<property name="InstrId" value=""/>
-<property name="EndToEndId" value=""/>
+<property name="MsgId" value="0"/>
+<property name="PmtInfId" value="0"/>
+<property name="InstrId" value="0"/>
+<property name="EndToEndId" value="0"/>
 <property name="Amount" expression="json-eval($.paymentAmount)"/>
 <property name="DAccountNo" expression="json-eval($.accountNo)"/>
 <property name="CAccountNo" value="1100223344"/>
@@ -18,7 +18,7 @@
 <property name="ErrorReason" value=""/>
 <property name="IsSuccessful" value="false"/>
 <property name="OrderId" expression="json-eval($.customerCode)"/>
-<property name="MerchantCode" value="526341"/>
+<property name="MerchantCode" value="858682"/>
 <property name="DbsUserId" expression="json-eval($.dbsUserId)"/>
 <!-- Hardcoded values -->
 <property name="updatedBy" value="Customer"/>
@@ -83,7 +83,7 @@
          
 <dbreport>
     <connection>
-        <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+        <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
     </connection>
     <statement>
         <sql>
@@ -236,7 +236,7 @@
     <then>
         <dbreport>
             <connection>
-                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
             </connection>
             <statement>
                 <sql>
@@ -256,7 +256,7 @@ WHERE "ReferenceNo" = ?
     <else>
         <dbreport>
             <connection>
-                <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+                <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
             </connection>
             <statement>
                 <sql>
@@ -287,7 +287,7 @@ WHERE "ReferenceNo" = ?
 
 <dbreport>
     <connection>
-        <pool><dsName>jdbc/DbsBillPaymentDB</dsName></pool>
+        <pool><dsName>jdbc/DbsTransferDispatcherDB</dsName></pool>
     </connection>
     <statement>
         <sql>

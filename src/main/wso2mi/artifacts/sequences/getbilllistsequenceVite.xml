@@ -56,7 +56,7 @@
     <dblookup>
     <connection>
         <pool>
-            <dsName>jdbc/DbsBillPaymentDB</dsName>
+            <dsName>jdbc/DbsTransferDispatcherDB</dsName>
         </pool>
     </connection>
     <statement>
@@ -113,7 +113,7 @@
         <dbreport>
             <connection>
                 <pool>
-                    <dsName>jdbc/DbsBillPaymentDB</dsName>
+                    <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                 </pool>
             </connection>
             <statement>
@@ -225,7 +225,8 @@
 
     <!-- Extract response status code -->
     <property name="responseCode" expression="$axis2:HTTP_SC" scope="default"/>
-
+ <property name="invoiceItems" expression="json-eval($)" scope="default"/>
+            
     <!-- Filter success or failure -->
     <filter source="$axis2:HTTP_SC" regex="200">
         <then>
@@ -244,7 +245,7 @@
             <dbreport>
                 <connection>
                     <pool>
-                        <dsName>jdbc/DbsBillPaymentDB</dsName>
+                        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                     </pool>
                 </connection>
                 <statement>
@@ -253,11 +254,11 @@
                             "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
                             "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError",
                             "ResProviderId", "InvoiceId", "InvoiceIdentificationValue", "InvoiceAmount",
-                            "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName"
+                            "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName", "RequestedBy", "FullResponse"
                         )
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','),
                              string_to_array(CAST(? AS TEXT), ',')::numeric[]
-, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','))
+, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','),? , ?)
                     </sql>
               
                       <parameter expression="get-property('currentDate')" type="TIMESTAMP"/>
@@ -280,6 +281,8 @@
                     <parameter expression="get-property('CurrencyDesignation')" type="VARCHAR"/>
                     <parameter expression="get-property('CustomerName')" type="VARCHAR"/>
                     <parameter expression="get-property('ProviderName')" type="VARCHAR"/>
+                                          <parameter value="DBS" type="VARCHAR"/>
+                            <parameter expression="get-property('invoiceItems')" type="VARCHAR"/>
                 </statement>
             </dbreport>
             
@@ -341,7 +344,7 @@
             <dbreport>
                 <connection>
                     <pool>
-                        <dsName>jdbc/DbsBillPaymentDB</dsName>
+                        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                     </pool>
                 </connection>
                 <statement>
@@ -350,11 +353,11 @@
                             "ResTransactionDate", "BillerType", "ReqProviderId", "UniqueCode", "PhoneNumber",
                             "ReferenceNo", "ReqTransactionDate", "AccountNo", "Status", "ResponseError",
                             "ResProviderId", "InvoiceId", "InvoiceIdentificationValue", "InvoiceAmount",
-                            "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName"
+                            "CurrencyAlphaCode", "CurrencyDesignation", "CustomerName", "ProviderName", "RequestedBy", "FullResponse"
                         )
                         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','),
                              string_to_array(CAST(? AS TEXT), ',')::numeric[]
-, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','))
+, string_to_array(?, ','),string_to_array(?, ','), string_to_array(?, ','), string_to_array(?, ','),? , ?)
                     </sql>
 
                     
@@ -377,13 +380,15 @@
                     <parameter expression="get-property('CurrencyDesignation')" type="VARCHAR"/>
                     <parameter expression="get-property('CustomerName')" type="VARCHAR"/>
                     <parameter expression="get-property('ProviderName')" type="VARCHAR"/>
+                                               <parameter value="DBS" type="VARCHAR"/>
+                            <parameter expression="get-property('Item')" type="VARCHAR"/>
                 </statement>
             </dbreport>
             
             <dbreport>
                 <connection>
                     <pool>
-                        <dsName>jdbc/DbsBillPaymentDB</dsName>
+                        <dsName>jdbc/DbsTransferDispatcherDB</dsName>
                     </pool>
                 </connection>
                 <statement>
